@@ -1,0 +1,9 @@
+[package]
+name = "archviz"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1"
+walkdir = "2"
+syn = { version = "2", features = ["full", "visit"] }

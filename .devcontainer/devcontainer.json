@@ -1,0 +1,20 @@
+{
+    "name": "Rust Dev Container",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "workspaceFolder": "/home/vscode/app",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/home/vscode/app,type=bind",
+    "runArgs": [
+        "--add-host=host.docker.internal:host-gateway"
+    ],
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "rust-lang.rust-analyzer",
+                "marus25.cortex-debug"
+            ]
+        }
+    },
+    "postCreateCommand": ""
+}
