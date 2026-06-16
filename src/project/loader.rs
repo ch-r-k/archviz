@@ -1,0 +1,64 @@
+use anyhow::Result;
+use std::path::{Path, PathBuf};
+use walkdir::WalkDir;
+
+use super::source_file::SourceFile;
+use crate::model::ModulePath;
+
+pub struct ProjectLoader {
+    root: PathBuf,
+}
+
+impl ProjectLoader {
+    pub fn new(root: impl Into<PathBuf>) -> Self {
+        Self { root: root.into() }
+    }
+
+    pub fn load(&self) -> Result<Vec<SourceFile>> {
+        let mut files = Vec::new();
+
+        for entry in WalkDir::new(&self.root) {
+            let entry = entry?;
+
+            if !entry.file_type().is_file() {
+                continue;
+            }
+
+            if entry.path().extension().and_then(|s| s.to_str()) != Some("rs") {
+                continue;
+            }
+
+            let path = entry.path().to_path_buf();
+            let source = std::fs::read_to_string(&path)?;
+
+            let module = compute_module(&self.root, &path);
+
+            files.push(SourceFile {
+                path,
+                module,
+                source,
+            });
+        }
+
+        Ok(files)
+    }
+}
+
+fn compute_module(root: &Path, file: &Path) -> ModulePath {
+    let rel = file.strip_prefix(root).unwrap();
+
+    let mut parts: Vec<String> = rel
+        .iter()
+        .map(|s| s.to_string_lossy().to_string())
+        .collect();
+
+    if let Some(last) = parts.last_mut() {
+        if last == "mod.rs" {
+            parts.pop();
+        } else if last.ends_with(".rs") {
+            *last = last.trim_end_matches(".rs").to_string();
+        }
+    }
+
+    ModulePath(parts)
+}

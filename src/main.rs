@@ -1,33 +1,33 @@
-mod extractor;
 mod model;
+mod parser;
+mod project;
 mod renderer;
 
 use anyhow::Result;
-use std::ffi::OsStr;
-use syn::visit::Visit;
-use walkdir::WalkDir;
 
-use crate::extractor::extractor::Extractor;
-use crate::renderer::plant_uml::generate_plantuml;
+use model::Graph;
+use parser::AstParser;
+use parser::visitor::GraphVisitor;
+use project::ProjectLoader;
+use renderer::plantuml::PlantUmlRenderer;
 
 fn main() -> Result<()> {
-    let root = std::env::args().nth(1).expect("Usage: archviz <path>");
+    let root = std::env::args().nth(1).expect("usage: archviz <path>");
 
-    let mut extractor = Extractor::new();
+    let loader = ProjectLoader::new(root);
+    let files = loader.load()?;
 
-    for entry in WalkDir::new(root) {
-        let entry = entry?;
+    let mut graph = Graph::default();
 
-        if entry.file_type().is_file() && entry.path().extension() == Some(OsStr::new("rs")) {
-            let source = std::fs::read_to_string(entry.path())?;
-            let ast = syn::parse_file(&source)?;
-            extractor.visit_file(&ast);
-        }
+    for file in files {
+        let parsed = AstParser::parse(file)?;
+
+        let visitor = GraphVisitor::new(&mut graph, &parsed.module);
+        visitor.visit_module(&parsed);
     }
 
-    let uml = generate_plantuml(&extractor.graph);
-
-    println!("{uml}");
+    let renderer = PlantUmlRenderer;
+    println!("{}", renderer.render(&graph));
 
     Ok(())
 }
