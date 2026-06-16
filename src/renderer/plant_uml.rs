@@ -8,7 +8,10 @@ pub fn generate_plantuml(graph: &Graph) -> String {
     for node in &graph.nodes {
         match node.kind {
             NodeKind::Struct => {
+                out.push_str(&format!("package \"{}\" \n", node.module.join("::")));
+                out.push_str("{\n");
                 out.push_str(&format!("class {}\n", node.name));
+                out.push_str("}\n");
             }
             NodeKind::Trait => {
                 out.push_str(&format!("interface {}\n", node.name));
@@ -20,12 +23,8 @@ pub fn generate_plantuml(graph: &Graph) -> String {
 
     for edge in &graph.edges {
         match edge.relation {
-            Relation::Composition => {
-                out.push_str(&format!("{} ..* {}\n", edge.from, edge.to))
-            },
-            Relation::Implements => {
-                out.push_str(&format!("{} ..|> {}\n", edge.from, edge.to))
-            }
+            Relation::Composition => out.push_str(&format!("{} ..* {}\n", edge.from, edge.to)),
+            Relation::Implements => out.push_str(&format!("{} ..|> {}\n", edge.from, edge.to)),
         }
     }
 
