@@ -9,7 +9,7 @@ use model::Graph;
 use parser::AstParser;
 use parser::visitor::GraphVisitor;
 use project::ProjectLoader;
-use renderer::plantuml::PlantUmlRenderer;
+use renderer::plant_uml::PlantUmlRenderer;
 
 fn main() -> Result<()> {
     let root = std::env::args().nth(1).expect("usage: archviz <path>");
