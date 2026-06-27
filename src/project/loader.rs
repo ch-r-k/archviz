@@ -3,7 +3,6 @@ use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 use super::source_file::SourceFile;
-use crate::model::ModulePath;
 
 pub struct ProjectLoader {
     root: PathBuf,
@@ -31,11 +30,11 @@ impl ProjectLoader {
             let path = entry.path().to_path_buf();
             let source = std::fs::read_to_string(&path)?;
 
-            let module = compute_module(&self.root, &path);
+            let module_path = compute_module(&self.root, &path);
 
             files.push(SourceFile {
                 path,
-                module,
+                module_path,
                 source,
             });
         }
@@ -44,7 +43,7 @@ impl ProjectLoader {
     }
 }
 
-fn compute_module(root: &Path, file: &Path) -> ModulePath {
+fn compute_module(root: &Path, file: &Path) -> Vec<String> {
     let rel = file.strip_prefix(root).unwrap();
 
     let mut parts: Vec<String> = rel
@@ -60,5 +59,5 @@ fn compute_module(root: &Path, file: &Path) -> ModulePath {
         }
     }
 
-    ModulePath(parts)
+   parts
 }
