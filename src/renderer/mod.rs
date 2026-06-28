@@ -1,4 +1,5 @@
 pub mod plantuml;
+mod tests;
 
 use crate::model::{Edge, Graph, Node};
 

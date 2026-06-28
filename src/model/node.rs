@@ -3,7 +3,9 @@ pub enum NodeKind {
     Struct,
     Trait,
     Enum,
-    Impl { trait_name: Option<String> },
+    Impl {
+        trait_name: Option<String>,
+    },
     TypeAlias,
     /// A synthetic node generated for a compound type (e.g. `Vec<String>`)
     /// that has no corresponding source-level definition.
@@ -14,5 +16,5 @@ pub enum NodeKind {
 pub struct Node {
     pub name: String,
     pub kind: NodeKind,
-    pub module_path: Vec<String>
+    pub module_path: Vec<String>,
 }
