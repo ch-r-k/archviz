@@ -1,5 +1,5 @@
 use crate::model::{Edge, Node, NodeKind, Relation, TypeExpr};
-use crate::renderer::DrawNode;
+use crate::renderer::{DrawNode, DrawEdge};
 use crate::renderer::plantuml::PlantUmlRenderer;
 
 #[test]
@@ -79,5 +79,143 @@ fn draw_implement_node() {
     assert_eq!(
         renderer.draw_node(&node),
         format!("class {} < {} >\n", impl_name, trait_name)
+    );
+}
+
+#[test]
+fn draw_enum_node() {
+    let renderer = PlantUmlRenderer;
+
+    let enum_name = "my_enum";
+
+    let node = Node {
+        name: enum_name.into(),
+        kind: NodeKind::Enum,
+        module_path: vec![],
+    };
+
+    assert_eq!(renderer.draw_node(&node), format!("enum {}\n", enum_name));
+}
+
+#[test]
+fn draw_type_alias_node() {
+    let renderer = PlantUmlRenderer;
+
+    let alias_name = "MyAlias";
+
+    let node = Node {
+        name: alias_name.into(),
+        kind: NodeKind::TypeAlias,
+        module_path: vec![],
+    };
+
+    assert_eq!(
+        renderer.draw_node(&node),
+        format!("class {} < type >\n", alias_name)
+    );
+}
+
+#[test]
+fn draw_synthetic_node_with_expr() {
+    let renderer = PlantUmlRenderer;
+
+    let synthetic_name = "Vec<String>";
+
+    let node = Node {
+        name: synthetic_name.into(),
+        kind: NodeKind::Synthetic {
+            expr: Some(TypeExpr::Generic {
+                base: "Vec".to_string(),
+                args: vec![TypeExpr::Simple("String".to_string())],
+            }),
+        },
+        module_path: vec![],
+    };
+
+    assert_eq!(
+        renderer.draw_node(&node),
+        format!("class \"Vec<String>\" \n")
+    );
+}
+
+#[test]
+fn draw_synthetic_node_without_expr() {
+    let renderer = PlantUmlRenderer;
+
+    let synthetic_name = "SomeType";
+
+    let node = Node {
+        name: synthetic_name.into(),
+        kind: NodeKind::Synthetic { expr: None },
+        module_path: vec![],
+    };
+
+    assert_eq!(renderer.draw_node(&node), format!("class {} \n", synthetic_name));
+}
+
+#[test]
+fn draw_composition_edge() {
+    let renderer = PlantUmlRenderer;
+
+    let edge = Edge {
+        from: "User".to_string(),
+        to: TypeExpr::Simple("Profile".to_string()),
+        relation: Relation::Composition,
+    };
+
+    assert_eq!(
+        renderer.draw_edge(&edge),
+        "User *-- Profile\n".to_string()
+    );
+}
+
+#[test]
+fn draw_composition_edge_with_generic_type() {
+    let renderer = PlantUmlRenderer;
+
+    let edge = Edge {
+        from: "Repository".to_string(),
+        to: TypeExpr::Generic {
+            base: "Vec".to_string(),
+            args: vec![TypeExpr::Simple("Item".to_string())],
+        },
+        relation: Relation::Composition,
+    };
+
+    assert_eq!(
+        renderer.draw_edge(&edge),
+        "Repository *-- \"Vec<Item>\"\n".to_string()
+    );
+}
+
+#[test]
+fn draw_implements_edge() {
+    let renderer = PlantUmlRenderer;
+
+    let edge = Edge {
+        from: "MyStruct".to_string(),
+        to: TypeExpr::Simple("Debug".to_string()),
+        relation: Relation::Implements,
+    };
+
+    assert_eq!(
+        renderer.draw_edge(&edge),
+        "MyStruct ..|> Debug\n".to_string()
+    );
+}
+
+#[test]
+fn draw_node_with_special_chars_in_name() {
+    let renderer = PlantUmlRenderer;
+
+    let node = Node {
+        name: "Vec<String>".into(),
+        kind: NodeKind::Struct,
+        module_path: vec![],
+    };
+
+    assert_eq!(
+        renderer.draw_node(&node),
+        "class \"Vec<String>\"\n".to_string()
     );
 }
