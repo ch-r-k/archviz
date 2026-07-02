@@ -44,7 +44,7 @@ fn draw_trait_node() {
 }
 
 #[test]
-fn draw_trait_node() {
+fn draw_impl_node() {
     let renderer = PlantUmlRenderer;
 
     let trait_name = "my_trait";
@@ -66,9 +66,10 @@ fn draw_implement_node() {
     let renderer = PlantUmlRenderer;
 
     let trait_name = "my_trait";
+    let impl_name = "my_impl";
 
     let node = Node {
-        name: trait_name.into(),
+        name: impl_name.into(),
         kind: NodeKind::Impl {
             trait_name: Some(trait_name.into()),
         },
@@ -77,6 +78,6 @@ fn draw_implement_node() {
 
     assert_eq!(
         renderer.draw_node(&node),
-        format!("interface {}\n", trait_name)
+        format!("class {} < {} >\n", impl_name, trait_name)
     );
 }

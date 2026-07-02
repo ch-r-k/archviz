@@ -38,10 +38,7 @@ impl GraphEnricher for TypeExpander {
         // Snapshot current edges so we don't iterate while mutating.
         let edges: Vec<Edge> = graph.edges.clone();
         for edge in &edges {
-            let module_path = node_module
-                .get(&edge.from)
-                .cloned()
-                .unwrap_or_default();
+            let module_path = node_module.get(&edge.from).cloned().unwrap_or_default();
 
             collect(
                 resolve_refs(&edge.to),
@@ -133,7 +130,7 @@ fn collect(
         TypeExpr::Generic { args, .. } if !args.is_empty() => {
             if seen.insert(name.clone()) {
                 if !existing.contains(&name) {
-                    new_nodes.push(synthetic_node(name.clone(), module_path.to_vec()));
+                    new_nodes.push(synthetic_node(expr, module_path.to_vec()));
                 }
                 for arg in args {
                     let arg = resolve_refs(arg);
@@ -149,7 +146,7 @@ fn collect(
             let inner = resolve_refs(inner);
             if seen.insert(name.clone()) {
                 if !existing.contains(&name) {
-                    new_nodes.push(synthetic_node(name.clone(), module_path.to_vec()));
+                    new_nodes.push(synthetic_node(expr, module_path.to_vec()));
                 }
                 for target in edge_targets(inner) {
                     new_edges.push(composition(name.clone(), target));
@@ -161,7 +158,7 @@ fn collect(
         TypeExpr::Tuple(items) => {
             if seen.insert(name.clone()) {
                 if !existing.contains(&name) {
-                    new_nodes.push(synthetic_node(name.clone(), module_path.to_vec()));
+                    new_nodes.push(synthetic_node(expr, module_path.to_vec()));
                 }
                 for item in items {
                     let item = resolve_refs(item);
@@ -179,10 +176,12 @@ fn collect(
     }
 }
 
-fn synthetic_node(name: String, module_path: Vec<String>) -> Node {
+fn synthetic_node(expr: &TypeExpr, module_path: Vec<String>) -> Node {
     Node {
-        name,
-        kind: NodeKind::Synthetic,
+        name: type_name(expr),
+        kind: NodeKind::Synthetic {
+            expr: Some(expr.clone()),
+        },
         module_path,
     }
 }

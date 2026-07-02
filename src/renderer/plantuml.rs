@@ -31,17 +31,22 @@ impl DrawNode for PlantUmlRenderer {
             NodeKind::Enum => {
                 out.push_str(&format!("enum {}\n", quoted(&node.name)));
             }
-            NodeKind::Impl { trait_name: Some(t) } => {
-                out.push_str(&format!("class {} << impl {} >>\n", quoted(&node.name), t));
+            NodeKind::Impl {
+                trait_name: Some(t),
+            } => {
+                out.push_str(&format!("class {} < {} >\n", quoted(&node.name), t));
             }
             NodeKind::Impl { trait_name: None } => {
-                out.push_str(&format!("class {} << impl >>\n", quoted(&node.name)));
+                out.push_str(&format!("class {} \n", quoted(&node.name)));
             }
             NodeKind::TypeAlias => {
-                out.push_str(&format!("class {} << type >>\n", quoted(&node.name)));
+                out.push_str(&format!("class {} < type >\n", quoted(&node.name)));
             }
-            NodeKind::Synthetic => {
-                out.push_str(&format!("class {} << generic >>\n", quoted(&node.name)));
+            NodeKind::Synthetic { expr: Some(expr) } => {
+                out.push_str(&format!("class {} \n", quoted(&node.name)));
+            }
+            NodeKind::Synthetic { expr: None } => {
+                out.push_str(&format!("class {} \n", quoted(&node.name)));
             }
         }
 
@@ -113,4 +118,3 @@ fn quoted(name: &str) -> String {
         format!("\"{}\"", name)
     }
 }
-
