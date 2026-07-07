@@ -2,6 +2,7 @@
 pub enum Relation {
     Composition,
     Implements,
+    Specializes,  // Concrete generic type inherits from generic base (e.g., Vec<String> specializes Vec<T>)
 }
 
 #[derive(Debug, Clone)]

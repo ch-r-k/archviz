@@ -43,7 +43,16 @@ impl DrawNode for PlantUmlRenderer {
                 out.push_str(&format!("class {} < type >\n", quoted(&node.name)));
             }
             NodeKind::Synthetic { expr: Some(expr) } => {
-                out.push_str(&format!("class {} \n", quoted(&node.name)));
+                out.push_str(&format!("class {}\n", quoted(&node.name)));
+                
+                // Add a note explaining the generic type parameters
+                if let Some(note) = generic_type_note(expr) {
+                    out.push_str(&format!(
+                        "note right of {} : {}\n",
+                        quoted(&node.name),
+                        note
+                    ));
+                }
             }
             NodeKind::Synthetic { expr: None } => {
                 out.push_str(&format!("class {} \n", quoted(&node.name)));
@@ -62,8 +71,13 @@ impl DrawEdge for PlantUmlRenderer {
     fn draw_edge(&self, edge: &Edge) -> String {
         let target = type_name(resolve_refs(&edge.to));
         match edge.relation {
-            Relation::Composition => format!("{} *-- {}\n", quoted(&edge.from), quoted(&target)),
+            Relation::Composition => format!(
+                "{} --> {} : contains\n",
+                quoted(&edge.from),
+                quoted(&target)
+            ),
             Relation::Implements => format!("{} ..|> {}\n", quoted(&edge.from), quoted(&target)),
+            Relation::Specializes => format!("{} <|-- {}\n", quoted(&edge.from), quoted(&target)),
         }
     }
 }
@@ -116,5 +130,35 @@ fn quoted(name: &str) -> String {
         name.to_string()
     } else {
         format!("\"{}\"", name)
+    }
+}
+
+/// Generates a PlantUML note for a synthetic generic type, showing the base type
+/// and type parameters. For example, `Vec<String>` → "Generic Vec<T> with T = String"
+fn generic_type_note(expr: &TypeExpr) -> Option<String> {
+    match expr {
+        TypeExpr::Generic { base, args } if !args.is_empty() => {
+            let args_str = args
+                .iter()
+                .map(|a| type_name(resolve_refs(a)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            Some(format!("Generic {}<<T>> with T = {}", base, args_str))
+        }
+        TypeExpr::Slice(inner) => {
+            Some(format!("Slice of {}", type_name(resolve_refs(inner))))
+        }
+        TypeExpr::Array(inner) => {
+            Some(format!("Array of {}", type_name(resolve_refs(inner))))
+        }
+        TypeExpr::Tuple(items) => {
+            let items_str = items
+                .iter()
+                .map(|i| type_name(resolve_refs(i)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            Some(format!("Tuple of ({})", items_str))
+        }
+        _ => None,
     }
 }

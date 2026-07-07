@@ -134,7 +134,7 @@ fn draw_synthetic_node_with_expr() {
 
     assert_eq!(
         renderer.draw_node(&node),
-        format!("class \"Vec<String>\" \n")
+        format!("class \"Vec<String>\"\nnote right of \"Vec<String>\" : Generic Vec<<T>> with T = String\n")
     );
 }
 
@@ -165,7 +165,7 @@ fn draw_composition_edge() {
 
     assert_eq!(
         renderer.draw_edge(&edge),
-        "User *-- Profile\n".to_string()
+        "User --> Profile : contains\n".to_string()
     );
 }
 
@@ -184,7 +184,7 @@ fn draw_composition_edge_with_generic_type() {
 
     assert_eq!(
         renderer.draw_edge(&edge),
-        "Repository *-- \"Vec<Item>\"\n".to_string()
+        "Repository --> \"Vec<Item>\" : contains\n".to_string()
     );
 }
 
@@ -201,6 +201,22 @@ fn draw_implements_edge() {
     assert_eq!(
         renderer.draw_edge(&edge),
         "MyStruct ..|> Debug\n".to_string()
+    );
+}
+
+#[test]
+fn draw_specializes_edge() {
+    let renderer = PlantUmlRenderer;
+
+    let edge = Edge {
+        from: "Vec<String>".to_string(),
+        to: TypeExpr::Simple("Vec<T>".to_string()),
+        relation: Relation::Specializes,
+    };
+
+    assert_eq!(
+        renderer.draw_edge(&edge),
+        "\"Vec<String>\" <|-- \"Vec<T>\"\n".to_string()
     );
 }
 
