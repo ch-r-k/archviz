@@ -69,7 +69,7 @@ impl DrawNode for PlantUmlRenderer {
 
 impl DrawEdge for PlantUmlRenderer {
     fn draw_edge(&self, edge: &Edge) -> String {
-        let target = type_name(resolve_refs(&edge.to));
+        let target = edge.to.resolve_refs().type_name();
         match edge.relation {
             Relation::Composition => format!(
                 "{} --> {} : contains\n",
@@ -79,47 +79,6 @@ impl DrawEdge for PlantUmlRenderer {
             Relation::Implements => format!("{} ..|> {}\n", quoted(&edge.from), quoted(&target)),
             Relation::Specializes => format!("{} <|-- {}\n", quoted(&edge.from), quoted(&target)),
         }
-    }
-}
-
-/// Strips top-level `&` references to reach the underlying type.
-fn resolve_refs(expr: &TypeExpr) -> &TypeExpr {
-    match expr {
-        TypeExpr::Reference(inner) => resolve_refs(inner),
-        other => other,
-    }
-}
-
-/// Returns the display name for a type expression.
-fn type_name(expr: &TypeExpr) -> String {
-    match expr {
-        TypeExpr::Simple(name) => name.clone(),
-        TypeExpr::Generic { base, args } => {
-            if args.is_empty() {
-                base.clone()
-            } else {
-                let rendered = args
-                    .iter()
-                    .map(|a| type_name(resolve_refs(a)))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!("{}<{}>", base, rendered)
-            }
-        }
-        TypeExpr::Reference(inner) => type_name(inner),
-        TypeExpr::Slice(inner) => format!("[{}]", type_name(resolve_refs(inner))),
-        TypeExpr::Array(inner) => format!("[{}; N]", type_name(resolve_refs(inner))),
-        TypeExpr::Tuple(items) => {
-            let rendered = items
-                .iter()
-                .map(|i| type_name(resolve_refs(i)))
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("({})", rendered)
-        }
-        TypeExpr::DynTrait(traits) => format!("dyn {}", traits.join(" + ")),
-        TypeExpr::ImplTrait(traits) => format!("impl {}", traits.join(" + ")),
-        TypeExpr::Unknown => "_".to_string(),
     }
 }
 
@@ -140,21 +99,17 @@ fn generic_type_note(expr: &TypeExpr) -> Option<String> {
         TypeExpr::Generic { base, args } if !args.is_empty() => {
             let args_str = args
                 .iter()
-                .map(|a| type_name(resolve_refs(a)))
+                .map(|a| a.resolve_refs().type_name())
                 .collect::<Vec<_>>()
                 .join(", ");
             Some(format!("Generic {}<<T>> with T = {}", base, args_str))
         }
-        TypeExpr::Slice(inner) => {
-            Some(format!("Slice of {}", type_name(resolve_refs(inner))))
-        }
-        TypeExpr::Array(inner) => {
-            Some(format!("Array of {}", type_name(resolve_refs(inner))))
-        }
+        TypeExpr::Slice(inner) => Some(format!("Slice of {}", inner.resolve_refs().type_name())),
+        TypeExpr::Array(inner) => Some(format!("Array of {}", inner.resolve_refs().type_name())),
         TypeExpr::Tuple(items) => {
             let items_str = items
                 .iter()
-                .map(|i| type_name(resolve_refs(i)))
+                .map(|i| i.resolve_refs().type_name())
                 .collect::<Vec<_>>()
                 .join(", ");
             Some(format!("Tuple of ({})", items_str))

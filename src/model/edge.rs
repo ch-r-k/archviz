@@ -33,6 +33,54 @@ impl TypeExpr {
             TypeExpr::Unknown => "_",
         }
     }
+
+    /// Strips top-level `&`/`&mut` references to reach the underlying type.
+    ///
+    /// The single source of truth for this traversal — previously duplicated
+    /// in `enricher/type_expander.rs` and `renderer/plantuml.rs`.
+    pub fn resolve_refs(&self) -> &TypeExpr {
+        match self {
+            TypeExpr::Reference(inner) => inner.resolve_refs(),
+            other => other,
+        }
+    }
+
+    /// Returns the display name used as a diagram node/edge identifier
+    /// (e.g. `Vec<String>`, `[u8]`, `(A, B)`, `dyn Trait`).
+    ///
+    /// The single source of truth for this traversal — previously duplicated
+    /// in `enricher/type_expander.rs` and `renderer/plantuml.rs`.
+    pub fn type_name(&self) -> String {
+        match self {
+            TypeExpr::Simple(name) => name.clone(),
+            TypeExpr::Generic { base, args } => {
+                if args.is_empty() {
+                    base.clone()
+                } else {
+                    let rendered = args
+                        .iter()
+                        .map(|a| a.resolve_refs().type_name())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!("{}<{}>", base, rendered)
+                }
+            }
+            TypeExpr::Reference(inner) => inner.type_name(),
+            TypeExpr::Slice(inner) => format!("[{}]", inner.resolve_refs().type_name()),
+            TypeExpr::Array(inner) => format!("[{}; N]", inner.resolve_refs().type_name()),
+            TypeExpr::Tuple(items) => {
+                let rendered = items
+                    .iter()
+                    .map(|i| i.resolve_refs().type_name())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("({})", rendered)
+            }
+            TypeExpr::DynTrait(traits) => format!("dyn {}", traits.join(" + ")),
+            TypeExpr::ImplTrait(traits) => format!("impl {}", traits.join(" + ")),
+            TypeExpr::Unknown => "_".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

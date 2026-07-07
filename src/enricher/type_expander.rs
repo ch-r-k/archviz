@@ -22,78 +22,68 @@ pub struct TypeExpander;
 
 impl GraphEnricher for TypeExpander {
     fn enrich(&self, graph: &mut Graph) {
-        // Names that already have a node — never emit a synthetic duplicate.
-        let existing: HashSet<String> = graph.nodes.iter().map(|n| n.name.clone()).collect();
-
-        // Map from node name → module path, used to place synthetic nodes in
-        // the same package as the first struct/enum that references them.
-        let node_module: HashMap<String, Vec<String>> = graph
-            .nodes
-            .iter()
-            .map(|n| (n.name.clone(), n.module_path.clone()))
-            .collect();
+        let existing = existing_node_names(graph);
+        let node_module = node_module_index(graph);
 
         let mut seen: HashSet<String> = HashSet::new();
         let mut new_nodes: Vec<Node> = Vec::new();
         let mut new_edges: Vec<Edge> = Vec::new();
-        let mut trait_wrapper_indices = HashSet::new();
+        let mut retained_edges: Vec<Edge> = Vec::new();
 
-        // Snapshot current edges so we don't iterate while mutating.
-        let edges: Vec<Edge> = graph.edges.clone();
-        for (idx, edge) in edges.iter().enumerate() {
+        for edge in graph.edges.drain(..).collect::<Vec<_>>() {
             let module_path = node_module.get(&edge.from).cloned().unwrap_or_default();
 
-            // For trait wrappers (Box<dyn T>, Vec<dyn T>, etc.), don't create
-            // synthetic nodes—replace with direct edges to the trait.
             if is_trait_wrapper(&edge.to) {
-                trait_wrapper_indices.insert(idx);
-                // Find the actual trait(s) and create direct edges
-                if let Some(traits) = extract_traits(&edge.to) {
-                    for trait_name in traits {
-                        new_edges.push(Edge {
-                            from: edge.from.clone(),
-                            to: TypeExpr::Simple(trait_name),
-                            relation: edge.relation.clone(),
-                        });
-                    }
-                }
+                // Trait wrappers (Box<dyn T>, Vec<dyn T>, ...) don't get a
+                // synthetic node — replace the edge with a direct edge to the
+                // underlying trait(s) instead.
+                new_edges.extend(direct_trait_edges(&edge));
             } else {
-                // For non-trait types, expand into synthetic nodes
                 collect(
-                    resolve_refs(&edge.to),
+                    edge.to.resolve_refs(),
                     &module_path,
                     &existing,
                     &mut seen,
                     &mut new_nodes,
                     &mut new_edges,
                 );
+                retained_edges.push(edge);
             }
         }
 
-        // Remove original trait-wrapper edges and add new ones
-        graph.edges = edges
-            .into_iter()
-            .enumerate()
-            .filter_map(|(idx, edge)| {
-                if trait_wrapper_indices.contains(&idx) {
-                    None
-                } else {
-                    Some(edge)
-                }
-            })
-            .collect();
-
+        graph.edges = retained_edges;
         graph.nodes.extend(new_nodes);
         graph.edges.extend(new_edges);
     }
 }
 
-/// Strips top-level `&` / `& mut` references to reach the underlying type.
-fn resolve_refs(expr: &TypeExpr) -> &TypeExpr {
-    match expr {
-        TypeExpr::Reference(inner) => resolve_refs(inner),
-        other => other,
-    }
+/// Names that already have a node — never emit a synthetic duplicate for them.
+fn existing_node_names(graph: &Graph) -> HashSet<String> {
+    graph.nodes.iter().map(|n| n.name.clone()).collect()
+}
+
+/// Maps node name → module path, used to place synthetic nodes in the same
+/// package as the first struct/enum that references them.
+fn node_module_index(graph: &Graph) -> HashMap<String, Vec<String>> {
+    graph
+        .nodes
+        .iter()
+        .map(|n| (n.name.clone(), n.module_path.clone()))
+        .collect()
+}
+
+/// Builds direct composition/implements edges from `edge.from` to the
+/// trait(s) wrapped by `edge.to` (e.g. `Box<dyn Foo>` → edge to `Foo`).
+fn direct_trait_edges(edge: &Edge) -> Vec<Edge> {
+    extract_traits(&edge.to)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|trait_name| Edge {
+            from: edge.from.clone(),
+            to: TypeExpr::Simple(trait_name),
+            relation: edge.relation.clone(),
+        })
+        .collect()
 }
 
 /// Checks if a type is a wrapper (possibly nested) around a dyn/impl trait.
@@ -102,9 +92,10 @@ fn is_trait_wrapper(expr: &TypeExpr) -> bool {
         TypeExpr::DynTrait(_) | TypeExpr::ImplTrait(_) => true,
         TypeExpr::Generic { args, .. } if !args.is_empty() => {
             // Recursively check if any argument is a trait wrapper
-            args.iter().any(|arg| is_trait_wrapper(resolve_refs(arg)))
+            args.iter()
+                .any(|arg| is_trait_wrapper(arg.resolve_refs()))
         }
-        TypeExpr::Reference(inner) => is_trait_wrapper(resolve_refs(inner)),
+        TypeExpr::Reference(inner) => is_trait_wrapper(inner.resolve_refs()),
         _ => false,
     }
 }
@@ -117,58 +108,25 @@ fn extract_traits(expr: &TypeExpr) -> Option<Vec<String>> {
         TypeExpr::Generic { args, .. } if !args.is_empty() => {
             // Look through generic arguments for traits
             for arg in args {
-                if let Some(traits) = extract_traits(resolve_refs(arg)) {
+                if let Some(traits) = extract_traits(arg.resolve_refs()) {
                     return Some(traits);
                 }
             }
             None
         }
-        TypeExpr::Reference(inner) => extract_traits(resolve_refs(inner)),
+        TypeExpr::Reference(inner) => extract_traits(inner.resolve_refs()),
         _ => None,
-    }
-}
-
-/// Returns the display name used as the node identifier (e.g. `Vec<String>`).
-fn type_name(expr: &TypeExpr) -> String {
-    match expr {
-        TypeExpr::Simple(name) => name.clone(),
-        TypeExpr::Generic { base, args } => {
-            if args.is_empty() {
-                base.clone()
-            } else {
-                let rendered = args
-                    .iter()
-                    .map(|a| type_name(resolve_refs(a)))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!("{}<{}>", base, rendered)
-            }
-        }
-        TypeExpr::Reference(inner) => type_name(inner),
-        TypeExpr::Slice(inner) => format!("[{}]", type_name(resolve_refs(inner))),
-        TypeExpr::Array(inner) => format!("[{}; N]", type_name(resolve_refs(inner))),
-        TypeExpr::Tuple(items) => {
-            let rendered = items
-                .iter()
-                .map(|i| type_name(resolve_refs(i)))
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("({})", rendered)
-        }
-        TypeExpr::DynTrait(traits) => format!("dyn {}", traits.join(" + ")),
-        TypeExpr::ImplTrait(traits) => format!("impl {}", traits.join(" + ")),
-        TypeExpr::Unknown => "_".to_string(),
     }
 }
 
 /// Returns the edge target name(s) for a type argument:
 /// - `dyn Trait` / `impl Trait` → the individual trait names, pointing directly
 ///   at the existing trait nodes (no intermediate `"dyn Foo"` node).
-/// - everything else → `[type_name(expr)]`
+/// - everything else → `[expr.type_name()]`
 fn edge_targets(expr: &TypeExpr) -> Vec<String> {
     match expr {
         TypeExpr::DynTrait(traits) | TypeExpr::ImplTrait(traits) => traits.clone(),
-        other => vec![type_name(other)],
+        other => vec![other.type_name()],
     }
 }
 
@@ -183,7 +141,7 @@ fn collect(
     new_nodes: &mut Vec<Node>,
     new_edges: &mut Vec<Edge>,
 ) {
-    let name = type_name(expr);
+    let name = expr.type_name();
     match expr {
         TypeExpr::Simple(_) => {}
 
@@ -206,7 +164,7 @@ fn collect(
                     new_edges.push(specializes_edge);
                 }
                 for arg in args {
-                    let arg = resolve_refs(arg);
+                    let arg = arg.resolve_refs();
                     for target in edge_targets(arg) {
                         new_edges.push(composition(name.clone(), target));
                     }
@@ -216,7 +174,7 @@ fn collect(
         }
 
         TypeExpr::Slice(inner) | TypeExpr::Array(inner) => {
-            let inner = resolve_refs(inner);
+            let inner = inner.resolve_refs();
             if seen.insert(name.clone()) {
                 if !existing.contains(&name) {
                     new_nodes.push(synthetic_node(expr, module_path.to_vec()));
@@ -234,7 +192,7 @@ fn collect(
                     new_nodes.push(synthetic_node(expr, module_path.to_vec()));
                 }
                 for item in items {
-                    let item = resolve_refs(item);
+                    let item = item.resolve_refs();
                     for target in edge_targets(item) {
                         new_edges.push(composition(name.clone(), target));
                     }
@@ -251,7 +209,7 @@ fn collect(
 
 fn synthetic_node(expr: &TypeExpr, module_path: Vec<String>) -> Node {
     Node {
-        name: type_name(expr),
+        name: expr.type_name(),
         kind: NodeKind::Synthetic {
             expr: Some(expr.clone()),
         },
@@ -283,7 +241,7 @@ fn is_std_type(base: &str) -> bool {
 /// - A `Specializes` edge from `Vec<String>` to `Vec<T>`
 fn create_generic_base_and_specialization(expr: &TypeExpr) -> (Node, Edge) {
     if let TypeExpr::Generic { base, .. } = expr {
-        let concrete_name = type_name(expr);
+        let concrete_name = expr.type_name();
         let generic_name = format!("{}<T>", base);
         let module_path = if is_std_type(base) {
             vec!["std".to_string()]
