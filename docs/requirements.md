@@ -1,0 +1,128 @@
+# Requirements
+
+This document lists the functional and non-functional requirements for
+archviz, derived from its current implementation and intended purpose.
+
+**Legend:** `[x]` implemented and verified in the current codebase ·
+`[ ]` not yet implemented, or only partially implemented (see the note on
+that item for what's missing).
+
+## Functional requirements
+
+### Input
+
+- [x] FR1: The tool shall accept a single command-line argument specifying
+  the path to a directory containing Rust source files (e.g. a crate's
+  `src/` directory).
+- [x] FR2: The tool shall recursively discover all files with a `.rs`
+  extension under the given path, including files in nested
+  subdirectories.
+- [x] FR3: The tool shall derive each discovered file's module path from
+  its location relative to the given root, following Rust's module-path
+  conventions (e.g. `src/foo/bar.rs` → module `foo::bar`; a `mod.rs` file's
+  own segment is dropped from its module path).
+
+### Parsing and analysis
+
+- [x] FR4: The tool shall parse each discovered file as Rust source code
+  and extract its abstract syntax tree.
+- [x] FR5: The tool shall identify all `struct` definitions and represent
+  each as a diagram node.
+- [x] FR6: The tool shall identify all `trait` definitions and represent
+  each as a diagram node.
+- [x] FR7: The tool shall identify all fields of a struct and represent
+  each field's type as a relationship (composition) from the struct to
+  that type.
+- [x] FR8: The tool shall identify all `impl Trait for Struct` blocks and
+  represent them as an "implements" relationship from the struct to the
+  trait.
+- [x] FR9: The tool shall decompose complex field types — references,
+  generics, arrays, slices, tuples, `dyn Trait`, and `impl Trait` — into
+  their constituent parts so that relationships to the underlying types
+  are captured, not just the outermost type.
+- [ ] FR10: The tool shall continue processing remaining files if parsing
+  an individual file succeeds, and shall surface a clear error if a file
+  cannot be parsed or read.
+  > Not implemented: `Pipeline::run` propagates the first parse/read error
+  > with `?` and aborts the whole run instead of skipping the offending
+  > file and continuing with the rest.
+
+### Enrichment
+
+- [x] FR11: The tool shall, after analyzing all files, synthesize
+  additional diagram nodes for compound types that have no explicit
+  source-level definition (e.g. `Vec<String>`, `Option<T>`, `Box<dyn
+  Trait>`), so that such relationships are still visualized.
+- [x] FR12: The tool shall resolve `dyn Trait` / `impl Trait` bounds to
+  the underlying trait node(s) rather than creating a redundant
+  intermediate node.
+- [x] FR13: The enrichment step shall support being extended with
+  additional, independent enrichment passes without modifying existing
+  ones.
+
+### Rendering / output
+
+- [x] FR14: The tool shall render the analyzed and enriched model as
+  diagram markup that can be consumed by an external UML rendering tool.
+- [ ] FR15: The default output format shall be PlantUML class-diagram
+  syntax, representing structs as `class`, traits as `interface`, and
+  enums as `enum`.
+  > Partially implemented: `PlantUmlRenderer` already has rendering logic
+  > for `NodeKind::Enum`, but the parser's `GraphVisitor` never visits
+  > `enum` items or creates `Enum` nodes, so enums are not yet extracted
+  > from source and never reach the renderer.
+- [x] FR16: The rendered output shall group nodes into nested packages
+  reflecting their module path, so the diagram reflects the project's
+  module structure.
+- [x] FR17: The rendered output shall include all discovered composition
+  and "implements" relationships as diagram edges/arrows.
+- [x] FR18: The tool shall print the rendered diagram markup to standard
+  output, so it can be redirected to a file or piped into another tool.
+- [x] FR19: The rendering step shall be replaceable with an alternative
+  output format (e.g. Mermaid, Graphviz) without requiring changes to the
+  parsing or enrichment steps.
+
+## Non-functional requirements
+
+- [x] NFR1: The tool shall be usable as a single self-contained
+  command-line binary (`cargo run -- <path>` / a compiled executable),
+  requiring no network access or external services to run.
+- [x] NFR2: Each pipeline stage (loading, parsing, enrichment, rendering)
+  shall be independently testable and swappable, so that new languages,
+  analyses, or output formats can be added with minimal changes to
+  existing code (open/closed principle).
+- [ ] NFR3: The tool shall process a typical small-to-medium Rust project
+  (tens to low hundreds of files) in a few seconds or less on commodity
+  hardware.
+  > Not verified: no benchmark or timing test exists yet to confirm this
+  > target is met.
+- [x] NFR4: The tool's behavior shall be deterministic for a given input
+  directory — running it twice on unchanged source shall produce
+  identical output.
+- [ ] NFR5: The codebase shall have automated tests covering the parsing,
+  enrichment, and rendering stages, runnable via `cargo test`.
+  > Partially implemented: automated tests exist only for the renderer
+  > (`src/renderer/tests.rs`); the parser/visitor and enricher stages
+  > currently have no dedicated tests.
+- [x] NFR6: Each struct/trait shall expose a small, human-trackable number
+  of members (fields/methods) — roughly 5–9 (Miller's "seven, plus or
+  minus two") — with logic beyond that split into smaller, well-named
+  helper functions/types rather than one large one.
+  > Applied during cleanup: `TypeExpr` naming/resolution logic was
+  > consolidated into 3 inherent methods (`base_name`, `resolve_refs`,
+  > `type_name`) instead of being duplicated as free functions in two
+  > modules, and `TypeExpander::enrich` was split into small
+  > single-purpose helpers (`existing_node_names`, `node_module_index`,
+  > `direct_trait_edges`) instead of one long function.
+
+## Out of scope (current version)
+
+- Analyzing behavior, control flow, or runtime execution (e.g. sequence
+  diagrams) — only static structural relationships are modeled.
+- Emitting diagrams for enums' variants, type aliases, or free functions
+  in full detail (partial/planned support only — see
+  `architecture.md`).
+- Rendering diagrams directly as images; archviz emits diagram *source*
+  (e.g. PlantUML text) and relies on an external renderer to produce
+  the final image.
+- Analyzing languages other than Rust.
