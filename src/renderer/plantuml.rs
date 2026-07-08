@@ -43,15 +43,14 @@ impl DrawNode for PlantUmlRenderer {
                 out.push_str(&format!("class {} < type >\n", quoted(&node.name)));
             }
             NodeKind::Synthetic { expr: Some(expr) } => {
-                out.push_str(&format!("class {}\n", quoted(&node.name)));
-                
-                // Add a note explaining the generic type parameters
-                if let Some(note) = generic_type_note(expr) {
+                if let Some(params) = generic_params(expr) {
                     out.push_str(&format!(
-                        "note right of {} : {}\n",
+                        "class {} <{}>\n",
                         quoted(&node.name),
-                        note
+                        params
                     ));
+                } else {
+                    out.push_str(&format!("class {}\n", quoted(&node.name)));
                 }
             }
             NodeKind::Synthetic { expr: None } => {
@@ -82,6 +81,31 @@ impl DrawEdge for PlantUmlRenderer {
     }
 }
 
+/// Renders the generic-parameter list of a synthetic type expression for
+/// PlantUML's `class "Foo<Bar>" <Bar>` syntax. Returns `None` for expressions
+/// that don't have a natural type-parameter list (simple names, traits, ...).
+fn generic_params(expr: &TypeExpr) -> Option<String> {
+    match expr {
+        TypeExpr::Generic { args, .. } if !args.is_empty() => Some(
+            args.iter()
+                .map(|a| a.resolve_refs().type_name())
+                .collect::<Vec<_>>()
+                .join(", "),
+        ),
+        TypeExpr::Slice(inner) | TypeExpr::Array(inner) => {
+            Some(inner.resolve_refs().type_name())
+        }
+        TypeExpr::Tuple(items) => Some(
+            items
+                .iter()
+                .map(|i| i.resolve_refs().type_name())
+                .collect::<Vec<_>>()
+                .join(", "),
+        ),
+        _ => None,
+    }
+}
+
 /// Wraps a name in PlantUML double-quotes when it contains characters that are
 /// not valid in a bare identifier (e.g. `<`, `>`, `[`, `(`, spaces).
 fn quoted(name: &str) -> String {
@@ -89,31 +113,5 @@ fn quoted(name: &str) -> String {
         name.to_string()
     } else {
         format!("\"{}\"", name)
-    }
-}
-
-/// Generates a PlantUML note for a synthetic generic type, showing the base type
-/// and type parameters. For example, `Vec<String>` → "Generic Vec<T> with T = String"
-fn generic_type_note(expr: &TypeExpr) -> Option<String> {
-    match expr {
-        TypeExpr::Generic { base, args } if !args.is_empty() => {
-            let args_str = args
-                .iter()
-                .map(|a| a.resolve_refs().type_name())
-                .collect::<Vec<_>>()
-                .join(", ");
-            Some(format!("Generic {}<<T>> with T = {}", base, args_str))
-        }
-        TypeExpr::Slice(inner) => Some(format!("Slice of {}", inner.resolve_refs().type_name())),
-        TypeExpr::Array(inner) => Some(format!("Array of {}", inner.resolve_refs().type_name())),
-        TypeExpr::Tuple(items) => {
-            let items_str = items
-                .iter()
-                .map(|i| i.resolve_refs().type_name())
-                .collect::<Vec<_>>()
-                .join(", ");
-            Some(format!("Tuple of ({})", items_str))
-        }
-        _ => None,
     }
 }

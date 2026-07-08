@@ -134,7 +134,7 @@ fn draw_synthetic_node_with_expr() {
 
     assert_eq!(
         renderer.draw_node(&node),
-        format!("class \"Vec<String>\"\nnote right of \"Vec<String>\" : Generic Vec<<T>> with T = String\n")
+        format!("class \"Vec<String>\" <String>\n")
     );
 }
 
