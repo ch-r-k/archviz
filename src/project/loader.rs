@@ -46,10 +46,10 @@ impl ProjectLoader {
 fn compute_module(root: &Path, file: &Path) -> Vec<String> {
     let rel = file.strip_prefix(root).unwrap();
 
-    let mut parts: Vec<String> = rel
-        .iter()
-        .map(|s| s.to_string_lossy().to_string())
-        .collect();
+    let mut parts: Vec<String> = Vec::new();
+    for s in rel.components() {
+        parts.push(s.as_os_str().to_string_lossy().to_string());
+    }
 
     if let Some(last) = parts.last_mut() {
         if last == "mod.rs" {

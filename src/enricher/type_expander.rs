@@ -60,31 +60,36 @@ impl GraphEnricher for TypeExpander {
 
 /// Names that already have a node — never emit a synthetic duplicate for them.
 fn existing_node_names(graph: &Graph) -> HashSet<String> {
-    graph.nodes.iter().map(|n| n.name.clone()).collect()
+    let mut names: HashSet<String> = HashSet::new();
+    for n in &graph.nodes {
+        names.insert(n.name.clone());
+    }
+    names
 }
 
 /// Maps node name → module path, used to place synthetic nodes in the same
 /// package as the first struct/enum that references them.
 fn node_module_index(graph: &Graph) -> HashMap<String, Vec<String>> {
-    graph
-        .nodes
-        .iter()
-        .map(|n| (n.name.clone(), n.module_path.clone()))
-        .collect()
+    let mut index: HashMap<String, Vec<String>> = HashMap::new();
+    for n in &graph.nodes {
+        index.insert(n.name.clone(), n.module_path.clone());
+    }
+    index
 }
 
 /// Builds direct composition/implements edges from `edge.from` to the
 /// trait(s) wrapped by `edge.to` (e.g. `Box<dyn Foo>` → edge to `Foo`).
 fn direct_trait_edges(edge: &Edge) -> Vec<Edge> {
-    extract_traits(&edge.to)
-        .unwrap_or_default()
-        .into_iter()
-        .map(|trait_name| Edge {
+    let traits = extract_traits(&edge.to).unwrap_or_default();
+    let mut edges: Vec<Edge> = Vec::new();
+    for trait_name in traits {
+        edges.push(Edge {
             from: edge.from.clone(),
             to: TypeExpr::Simple(trait_name),
             relation: edge.relation.clone(),
-        })
-        .collect()
+        });
+    }
+    edges
 }
 
 /// Checks if a type is a wrapper (possibly nested) around a dyn/impl trait.
@@ -93,8 +98,14 @@ fn is_trait_wrapper(expr: &TypeExpr) -> bool {
         TypeExpr::DynTrait(_) | TypeExpr::ImplTrait(_) => true,
         TypeExpr::Generic { args, .. } if !args.is_empty() => {
             // Recursively check if any argument is a trait wrapper
-            args.iter()
-                .any(|arg| is_trait_wrapper(arg.resolve_refs()))
+            let mut found = false;
+            for arg in args {
+                if is_trait_wrapper(arg.resolve_refs()) {
+                    found = true;
+                    break;
+                }
+            }
+            found
         }
         TypeExpr::Reference(inner) => is_trait_wrapper(inner.resolve_refs()),
         _ => false,
@@ -159,7 +170,14 @@ fn collect(
                     
                     // Create a generic base node and specialization edge
                     let (generic_node, specializes_edge) = create_generic_base_and_specialization(expr);
-                    if !existing.contains(&generic_node.name) && !new_nodes.iter().any(|n| n.name == generic_node.name) {
+                    let mut exists_in_new = false;
+                    for n in new_nodes.as_slice() {
+                        if n.name == generic_node.name {
+                            exists_in_new = true;
+                            break;
+                        }
+                    }
+                    if !existing.contains(&generic_node.name) && !exists_in_new {
                         new_nodes.push(generic_node);
                     }
                     new_edges.push(specializes_edge);

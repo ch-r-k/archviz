@@ -133,47 +133,38 @@ match ty {
     }
 
     syn::Type::Tuple(type_tuple) => {
-        let elems = type_tuple
-            .elems
-            .iter()
-            .filter_map(extract_type_expr)
-            .collect();
+        let mut elems = Vec::new();
+        for e in &type_tuple.elems {
+            if let Some(t) = extract_type_expr(e) {
+                elems.push(t);
+            }
+        }
 
         Some(TypeExpr::Tuple(elems))
     }
 
     syn::Type::ImplTrait(type_impl_trait) => {
-        let traits = type_impl_trait
-            .bounds
-            .iter()
-            .filter_map(|b| {
-                if let syn::TypeParamBound::Trait(tr) = b {
-                    tr.path.segments
-                        .last()
-                        .map(|s| s.ident.to_string())
-                } else {
-                    None
+        let mut traits: Vec<String> = Vec::new();
+        for b in &type_impl_trait.bounds {
+            if let syn::TypeParamBound::Trait(tr) = b {
+                if let Some(s) = tr.path.segments.last() {
+                    traits.push(s.ident.to_string());
                 }
-            })
-            .collect();
+            }
+        }
 
         Some(TypeExpr::ImplTrait(traits))
     }
 
     syn::Type::TraitObject(type_trait_object) => {
-        let traits = type_trait_object
-            .bounds
-            .iter()
-            .filter_map(|b| {
-                if let syn::TypeParamBound::Trait(tr) = b {
-                    tr.path.segments
-                        .last()
-                        .map(|s| s.ident.to_string())
-                } else {
-                    None
+        let mut traits: Vec<String> = Vec::new();
+        for b in &type_trait_object.bounds {
+            if let syn::TypeParamBound::Trait(tr) = b {
+                if let Some(s) = tr.path.segments.last() {
+                    traits.push(s.ident.to_string());
                 }
-            })
-            .collect();
+            }
+        }
 
         Some(TypeExpr::DynTrait(traits))
     }

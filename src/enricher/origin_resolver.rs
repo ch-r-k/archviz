@@ -35,7 +35,11 @@ impl GraphEnricher for OriginResolver {
 /// enums, type aliases, impl blocks, and any previously-generated synthetic
 /// nodes).
 fn local_node_names(graph: &Graph) -> HashSet<String> {
-    graph.nodes.iter().map(|n| n.name.clone()).collect()
+    let mut names: HashSet<String> = HashSet::new();
+    for n in &graph.nodes {
+        names.insert(n.name.clone());
+    }
+    names
 }
 
 /// Recurses through a type expression, emitting a synthetic node for each

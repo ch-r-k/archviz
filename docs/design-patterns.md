@@ -304,3 +304,38 @@ trait abstraction — they are simple data holders / a single fixed
 implementation with no need for interchangeable strategies. Applying
 patterns where there is no variation to abstract over just adds
 indirection without benefit.
+
+## Coding convention: prefer `for` loops over iterator chains
+
+**General idea:** Rust's iterator adapters (`.iter().map(...).collect()`,
+`.iter().any(...)`, `.iter().filter_map(...).collect()`, …) are expressive
+but they also hide the loop body inside a chain of closures. An explicit
+`for` loop with a small `mut` accumulator makes the sequence of steps —
+"start empty, walk each element, push/insert/decide, return" — visible on
+the page, which is easier to step through in a debugger, easier to add
+a `println!`/breakpoint to, and easier to extend with an extra branch
+without restructuring the whole chain into a fold.
+
+**In archviz:** Whenever a loop-shaped transformation is needed —
+building a `Vec`/`HashSet`/`HashMap`, checking whether any element
+matches, joining a list of names — write it as a `for` loop over a `mut`
+accumulator rather than an `.iter()` / `.into_iter()` chain. For example,
+`TypeExpr::type_name()` builds the rendered generic argument list this
+way:
+
+```rust
+let mut parts: Vec<String> = Vec::new();
+for a in args {
+    parts.push(a.resolve_refs().type_name());
+}
+let rendered = parts.join(", ");
+```
+
+instead of the equivalent `args.iter().map(...).collect::<Vec<_>>().join(", ")`.
+The same convention applies to membership checks (write a `for` loop
+with an early `break` rather than `.iter().any(...)`) and to
+`filter_map`-style extractions (write a `for` loop with an `if let`
+inside rather than `.iter().filter_map(...).collect()`). Iterator methods
+on `Path`/`Components` that are only reachable via a method call
+(`rel.components()`) are still fine — the point is the loop *body*,
+not the source of the iterator.

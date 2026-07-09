@@ -57,11 +57,11 @@ impl TypeExpr {
                 if args.is_empty() {
                     base.clone()
                 } else {
-                    let rendered = args
-                        .iter()
-                        .map(|a| a.resolve_refs().type_name())
-                        .collect::<Vec<_>>()
-                        .join(", ");
+                    let mut parts: Vec<String> = Vec::new();
+                    for a in args {
+                        parts.push(a.resolve_refs().type_name());
+                    }
+                    let rendered = parts.join(", ");
                     format!("{}<{}>", base, rendered)
                 }
             }
@@ -69,11 +69,11 @@ impl TypeExpr {
             TypeExpr::Slice(inner) => format!("[{}]", inner.resolve_refs().type_name()),
             TypeExpr::Array(inner) => format!("[{}; N]", inner.resolve_refs().type_name()),
             TypeExpr::Tuple(items) => {
-                let rendered = items
-                    .iter()
-                    .map(|i| i.resolve_refs().type_name())
-                    .collect::<Vec<_>>()
-                    .join(", ");
+                let mut parts: Vec<String> = Vec::new();
+                for i in items {
+                    parts.push(i.resolve_refs().type_name());
+                }
+                let rendered = parts.join(", ");
                 format!("({})", rendered)
             }
             TypeExpr::DynTrait(traits) => format!("dyn {}", traits.join(" + ")),

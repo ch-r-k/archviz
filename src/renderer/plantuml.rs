@@ -86,22 +86,23 @@ impl DrawEdge for PlantUmlRenderer {
 /// that don't have a natural type-parameter list (simple names, traits, ...).
 fn generic_params(expr: &TypeExpr) -> Option<String> {
     match expr {
-        TypeExpr::Generic { args, .. } if !args.is_empty() => Some(
-            args.iter()
-                .map(|a| a.resolve_refs().type_name())
-                .collect::<Vec<_>>()
-                .join(", "),
-        ),
+        TypeExpr::Generic { args, .. } if !args.is_empty() => {
+            let mut parts: Vec<String> = Vec::new();
+            for a in args {
+                parts.push(a.resolve_refs().type_name());
+            }
+            Some(parts.join(", "))
+        }
         TypeExpr::Slice(inner) | TypeExpr::Array(inner) => {
             Some(inner.resolve_refs().type_name())
         }
-        TypeExpr::Tuple(items) => Some(
-            items
-                .iter()
-                .map(|i| i.resolve_refs().type_name())
-                .collect::<Vec<_>>()
-                .join(", "),
-        ),
+        TypeExpr::Tuple(items) => {
+            let mut parts: Vec<String> = Vec::new();
+            for i in items {
+                parts.push(i.resolve_refs().type_name());
+            }
+            Some(parts.join(", "))
+        }
         _ => None,
     }
 }
