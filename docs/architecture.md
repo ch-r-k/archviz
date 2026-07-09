@@ -24,7 +24,7 @@ flowchart TD
     P -->|"3 . GraphVisitor::new(&mut graph, ...).visit_module(...)"| GV["GraphVisitor\n(src/parser/visitor.rs)"]
     GV -->|"populates"| G["Graph\n(src/model, nodes + edges)"]
 
-    P -->|"4 . for each enricher: enricher.enrich(&mut graph)"| EN["GraphEnricher(s) (TypeExpander)\n(src/enricher)"]
+    P -->|"4 . for each enricher: enricher.enrich(&mut graph)"| EN["GraphEnricher(s) (TypeExpander, OriginResolver)\n(src/enricher)"]
     EN -->|"mutates"| G
 
     P -->|"5 . renderer.render(&graph)"| R["Renderer (PlantUmlRenderer)\n(src/renderer)"]
@@ -80,14 +80,26 @@ field types can be represented as relationships in the graph.
 
 Runs *after* all files have been parsed, so it can see the complete graph.
 The `GraphEnricher` trait has one method, `enrich(&self, graph: &mut
-Graph)`. The provided implementation, `TypeExpander`
-(`src/enricher/type_expander.rs`), walks every edge's `TypeExpr` and:
+Graph)`. Two implementations ship by default and run in this order:
+
+`TypeExpander` (`src/enricher/type_expander.rs`) walks every edge's
+`TypeExpr` and:
 
 - Synthesizes new `Node`s (`NodeKind::Synthetic`) for compound types that
   have no explicit source definition — e.g. `Vec<String>` becomes its own
   diagram node with a `Composition` edge to `String`.
 - Resolves `dyn Trait` / `impl Trait` bounds directly to the underlying
   trait node(s) instead of creating an intermediate node.
+
+`OriginResolver` (`src/enricher/origin_resolver.rs`) then iterates every
+node's outgoing edges and classifies each referenced base type as
+`Local` (already a node in the graph), `Std` (matches a known stdlib /
+primitive name), or `External`. Types with no matching node yet are
+materialized as synthetic nodes placed under the `std` or `external`
+package so they appear in the diagram, cleanly separated from
+project-local types. The classification is name-based (see
+`src/enricher/origin.rs`); a later revision could delegate to
+rust-analyzer for precise resolution.
 
 `Pipeline` supports **multiple** enrichers (`Vec<Box<dyn GraphEnricher>>`),
 run in order, so additional enrichment passes (e.g. computing metrics,

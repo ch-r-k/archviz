@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use crate::enricher::GraphEnricher;
+use crate::enricher::origin::is_std_name;
 use crate::model::{Edge, Graph, Node, NodeKind, Relation, TypeExpr};
 
 /// Pipeline enricher that expands complex type expressions (generics, slices,
@@ -225,16 +226,6 @@ fn composition(from: String, to: String) -> Edge {
     }
 }
 
-/// Determines if a type is from the standard library.
-fn is_std_type(base: &str) -> bool {
-    matches!(
-        base,
-        "Vec" | "String" | "Option" | "Result" | "Box" | "Arc" | "Rc" | "RefCell"
-            | "Mutex" | "RwLock" | "HashMap" | "BTreeMap" | "HashSet" | "BTreeSet"
-            | "VecDeque" | "LinkedList"
-    )
-}
-
 /// Creates a generic base node and a specialization edge for a concrete generic type.
 /// For example, `Vec<String>` creates:
 /// - A generic base node `Vec<T>` in the "std" package
@@ -243,7 +234,7 @@ fn create_generic_base_and_specialization(expr: &TypeExpr) -> (Node, Edge) {
     if let TypeExpr::Generic { base, .. } = expr {
         let concrete_name = expr.type_name();
         let generic_name = format!("{}<T>", base);
-        let module_path = if is_std_type(base) {
+        let module_path = if is_std_name(base) {
             vec!["std".to_string()]
         } else {
             vec![]
