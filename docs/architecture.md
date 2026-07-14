@@ -24,7 +24,7 @@ flowchart TD
     P -->|"3 . GraphVisitor::new(&mut graph, ...).visit_module(...)"| GV["GraphVisitor\n(src/parser/visitor.rs)"]
     GV -->|"populates"| G["Graph\n(src/model, nodes + edges)"]
 
-    P -->|"4 . for each enricher: enricher.enrich(&mut graph)"| EN["GraphEnricher(s) (TypeExpander, OriginResolver)\n(src/enricher)"]
+    P -->|"4 . for each enricher: enricher.enrich(&mut graph)"| EN["GraphEnricher (OriginResolver)\n(src/enricher)"]
     EN -->|"mutates"| G
 
     P -->|"5 . renderer.render(&graph)"| R["Renderer (PlantUmlRenderer)\n(src/renderer)"]
@@ -62,44 +62,51 @@ The `Parser` trait has one method, `parse(SourceFile) -> ParsedModule`,
 implemented by `AstParser` using the [`syn`](https://docs.rs/syn) crate to
 turn source text into an AST plus the file's `module_path`.
 
-`GraphVisitor` (`src/parser/visitor.rs`) then walks each `ParsedModule`'s
-AST using `syn::visit::Visit` and mutates a shared `Graph`:
+The parser stage is split into three layers, each with one job:
 
-- Each `struct` becomes a `Node` (`NodeKind::Struct`).
-- Each `trait` becomes a `Node` (`NodeKind::Trait`).
-- Each field of a struct becomes a `Composition` edge from the struct to
-  the field's type.
-- Each `impl Trait for Struct` becomes an `Implements` edge.
+- **`GraphVisitor` (`src/parser/visitor.rs`)** — thin `syn::Visit`
+  adapter. Walks the AST, matches on `syn::ItemStruct` / `ItemTrait` /
+  `ItemImpl` / `Field`, converts field types via `extract_type_expr`,
+  and forwards each observation to the builder. Does not touch the
+  graph directly.
+- **`extract_type_expr` (`src/parser/type_extractor.rs`)** — pure
+  function `syn::Type → Option<TypeExpr>`. Recursively unwraps
+  references, generic arguments, arrays/slices, tuples, and
+  `dyn`/`impl Trait` bounds into the parser-internal
+  `TypeExpr` IR (`src/parser/type_expr.rs`). Doesn't touch the graph.
+- **`GraphBuilder` (`src/parser/graph_builder.rs`)** — knows about
+  `Graph`/`Node`/`Edge`, not about `syn`. Exposes a small API
+  (`add_struct`, `add_trait`, `add_implements`, `add_field_type`) and
+  internally expands compound and trait-wrapper types on the fly:
 
-Field types are recursively decomposed into a `TypeExpr` tree (see
-`extract_type_expr` in `visitor.rs`), unwrapping references, generics,
-arrays/slices, tuples, and `dyn`/`impl Trait` bounds so that even complex
-field types can be represented as relationships in the graph.
+  - Trait objects (`dyn Trait`, `impl Trait`, `Box<dyn Trait>`, …)
+    short-circuit to a direct edge into each underlying trait node —
+    no wrapper node is created.
+  - Compound types (`Vec<String>`, `[u8]`, `(A, B)`, …) get a
+    `NodeKind::Synthetic` node plus `Composition` edges to their inner
+    types, recursively.
+  - Concrete generics (`Vec<String>`) additionally get a generic-base
+    node (`Vec<T>`) and a `Specializes` edge; standard-library bases
+    are placed inside the `std` package.
+
+`TypeExpr` is a parser-internal IR and does not leak into the graph —
+downstream stages only see plain `Edge { from: String, to: String,
+relation }`.
 
 ### 3. `GraphEnricher` (`src/enricher/`)
 
 Runs *after* all files have been parsed, so it can see the complete graph.
 The `GraphEnricher` trait has one method, `enrich(&self, graph: &mut
-Graph)`. Two implementations ship by default and run in this order:
+Graph)`. One implementation ships by default:
 
-`TypeExpander` (`src/enricher/type_expander.rs`) walks every edge's
-`TypeExpr` and:
-
-- Synthesizes new `Node`s (`NodeKind::Synthetic`) for compound types that
-  have no explicit source definition — e.g. `Vec<String>` becomes its own
-  diagram node with a `Composition` edge to `String`.
-- Resolves `dyn Trait` / `impl Trait` bounds directly to the underlying
-  trait node(s) instead of creating an intermediate node.
-
-`OriginResolver` (`src/enricher/origin_resolver.rs`) then iterates every
-node's outgoing edges and classifies each referenced base type as
-`Local` (already a node in the graph), `Std` (matches a known stdlib /
-primitive name), or `External`. Types with no matching node yet are
-materialized as synthetic nodes placed under the `std` or `external`
-package so they appear in the diagram, cleanly separated from
-project-local types. The classification is name-based (see
-`src/enricher/origin.rs`); a later revision could delegate to
-rust-analyzer for precise resolution.
+`OriginResolver` (`src/enricher/origin_resolver.rs`) iterates every edge
+target and classifies it as `Local` (already a node in the graph), `Std`
+(matches a known stdlib / primitive name), or `External`. Targets with no
+matching node yet are materialized as synthetic stub nodes placed under
+the `std` or `external` package so they appear in the diagram, cleanly
+separated from project-local types. The classification is name-based (see
+`src/model/origin.rs`); a later revision could delegate to rust-analyzer
+for precise resolution.
 
 `Pipeline` supports **multiple** enrichers (`Vec<Box<dyn GraphEnricher>>`),
 run in order, so additional enrichment passes (e.g. computing metrics,
@@ -147,8 +154,8 @@ let output = Pipeline::builder(root).build().run()?;
 ```
 
 `PipelineBuilder::new` supplies the default implementations (`AstParser`,
-`TypeExpander`, `PlantUmlRenderer`). Callers can override any stage before
-calling `.build()`:
+the `OriginResolver` enricher, `PlantUmlRenderer`). Callers can override
+any stage before calling `.build()`:
 
 ```rust
 Pipeline::builder(root)

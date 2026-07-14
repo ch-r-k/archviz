@@ -1,5 +1,3 @@
-use crate::model::TypeExpr;
-
 #[derive(Debug, Clone)]
 pub enum NodeKind {
     Struct,
@@ -10,9 +8,12 @@ pub enum NodeKind {
     },
     TypeAlias,
     /// A synthetic node generated for a compound type (e.g. `Vec<String>`)
-    /// that has no corresponding source-level definition.
+    /// that has no corresponding source-level definition. `params` carries
+    /// the pre-rendered stereotype content (e.g. `"String"` for `Vec<String>`,
+    /// `"A, B"` for `(A, B)`, `"T"` for the generic base `Vec<T>`); `None`
+    /// renders as a plain class.
     Synthetic {
-        expr: Option<TypeExpr>,
+        params: Option<String>,
     },
 }
 

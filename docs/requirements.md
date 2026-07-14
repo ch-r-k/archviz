@@ -108,12 +108,14 @@ that item for what's missing).
   of members (fields/methods) — roughly 5–9 (Miller's "seven, plus or
   minus two") — with logic beyond that split into smaller, well-named
   helper functions/types rather than one large one.
-  > Applied during cleanup: `TypeExpr` naming/resolution logic was
-  > consolidated into 3 inherent methods (`base_name`, `resolve_refs`,
-  > `type_name`) instead of being duplicated as free functions in two
-  > modules, and `TypeExpander::enrich` was split into small
-  > single-purpose helpers (`existing_node_names`, `node_module_index`,
-  > `direct_trait_edges`) instead of one long function.
+  > Applied during cleanup: type-expression expansion (compound-type
+  > synthesis, trait-wrapper unwrapping, generic-base specialization)
+  > was pulled out of the enricher stage and folded into
+  > `GraphVisitor::record_type` / `synthesize` in the parser, so the
+  > graph model exposes only stringly-typed edges and `TypeExpr` stays
+  > a parser-internal detail. The enricher stage is now just
+  > `OriginResolver`, which classifies each edge target as
+  > local/std/external.
 
 ## Out of scope (current version)
 

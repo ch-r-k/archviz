@@ -1,4 +1,4 @@
-use crate::model::{Edge, Node, NodeKind, Relation, TypeExpr};
+use crate::model::{Edge, Node, NodeKind, Relation};
 use crate::renderer::{DrawNode, DrawEdge};
 use crate::renderer::plantuml::PlantUmlRenderer;
 
@@ -124,10 +124,7 @@ fn draw_synthetic_node_with_expr() {
     let node = Node {
         name: synthetic_name.into(),
         kind: NodeKind::Synthetic {
-            expr: Some(TypeExpr::Generic {
-                base: "Vec".to_string(),
-                args: vec![TypeExpr::Simple("String".to_string())],
-            }),
+            params: Some("String".to_string()),
         },
         module_path: vec![],
     };
@@ -146,11 +143,11 @@ fn draw_synthetic_node_without_expr() {
 
     let node = Node {
         name: synthetic_name.into(),
-        kind: NodeKind::Synthetic { expr: None },
+        kind: NodeKind::Synthetic { params: None },
         module_path: vec![],
     };
 
-    assert_eq!(renderer.draw_node(&node), format!("class {} \n", synthetic_name));
+    assert_eq!(renderer.draw_node(&node), format!("class {}\n", synthetic_name));
 }
 
 #[test]
@@ -159,7 +156,7 @@ fn draw_composition_edge() {
 
     let edge = Edge {
         from: "User".to_string(),
-        to: TypeExpr::Simple("Profile".to_string()),
+        to: "Profile".to_string(),
         relation: Relation::Composition,
     };
 
@@ -175,10 +172,7 @@ fn draw_composition_edge_with_generic_type() {
 
     let edge = Edge {
         from: "Repository".to_string(),
-        to: TypeExpr::Generic {
-            base: "Vec".to_string(),
-            args: vec![TypeExpr::Simple("Item".to_string())],
-        },
+        to: "Vec<Item>".to_string(),
         relation: Relation::Composition,
     };
 
@@ -194,7 +188,7 @@ fn draw_implements_edge() {
 
     let edge = Edge {
         from: "MyStruct".to_string(),
-        to: TypeExpr::Simple("Debug".to_string()),
+        to: "Debug".to_string(),
         relation: Relation::Implements,
     };
 
@@ -210,7 +204,7 @@ fn draw_specializes_edge() {
 
     let edge = Edge {
         from: "Vec<String>".to_string(),
-        to: TypeExpr::Simple("Vec<T>".to_string()),
+        to: "Vec<T>".to_string(),
         relation: Relation::Specializes,
     };
 

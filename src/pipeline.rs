@@ -2,7 +2,6 @@ use anyhow::Result;
 
 use crate::enricher::GraphEnricher;
 use crate::enricher::origin_resolver::OriginResolver;
-use crate::enricher::type_expander::TypeExpander;
 use crate::model::Graph;
 use crate::parser::{AstParser, Parser};
 use crate::parser::visitor::GraphVisitor;
@@ -55,7 +54,7 @@ impl PipelineBuilder {
         Self {
             root: root.into(),
             parser: Box::new(AstParser),
-            enrichers: vec![Box::new(TypeExpander), Box::new(OriginResolver)],
+            enrichers: vec![Box::new(OriginResolver)],
             renderer: Box::new(PlantUmlRenderer),
         }
     }

@@ -88,7 +88,7 @@ providing defaults and fluent `with_*` methods:
 
 ```rust
 impl PipelineBuilder {
-    pub fn new(root: impl Into<String>) -> Self { /* defaults: AstParser, TypeExpander, PlantUmlRenderer */ }
+    pub fn new(root: impl Into<String>) -> Self { /* defaults: AstParser, OriginResolver, PlantUmlRenderer */ }
     pub fn with_parser(mut self, parser: impl Parser + 'static) -> Self { ... }
     pub fn with_enricher(mut self, enricher: impl GraphEnricher + 'static) -> Self { ... }
     pub fn with_renderer(mut self, renderer: impl Renderer + 'static) -> Self { ... }
@@ -108,7 +108,7 @@ sequenceDiagram
     participant Pipe as Pipeline
 
     Caller->>Builder: Pipeline::builder(root)
-    Note right of Builder: defaults: AstParser,<br/>TypeExpander, PlantUmlRenderer
+    Note right of Builder: defaults: AstParser,<br/>OriginResolver, PlantUmlRenderer
     Caller->>Builder: .with_renderer(MyRenderer)
     Builder-->>Builder: box & store MyRenderer
     Caller->>Builder: .with_enricher(MyEnricher)
@@ -131,11 +131,12 @@ that uses it. This is what makes a component testable (inject a fake/mock)
 and extensible (inject a new implementation without modifying the
 component).
 
-**In archviz:** `Pipeline` never constructs an `AstParser`, `TypeExpander`,
-or `PlantUmlRenderer` itself and never names those concrete types in its
-own fields — it only knows about the `Parser`, `GraphEnricher`, and
-`Renderer` traits. The concrete instances are supplied by
-`PipelineBuilder` (and, ultimately, chosen in `main.rs`). Consequences:
+**In archviz:** `Pipeline` never constructs an `AstParser`, a concrete
+enricher, or `PlantUmlRenderer` itself and never names those concrete
+types in its own fields — it only knows about the `Parser`,
+`GraphEnricher`, and `Renderer` traits. The concrete instances are
+supplied by `PipelineBuilder` (and, ultimately, chosen in `main.rs`).
+Consequences:
 
 - `Pipeline` can be exercised in tests with fake parsers/enrichers/renderers.
 - New back ends (a parser for another language, a new diagram format) can
@@ -299,8 +300,8 @@ default `render()` composes them, so `Pipeline` can depend on the single
 ## Where these patterns are *not* used
 
 Not every type needs a pattern. `ProjectLoader` and the plain data model
-(`Graph`, `Node`, `Edge`, `TypeExpr`) are concrete structs/enums with no
-trait abstraction — they are simple data holders / a single fixed
+(`Graph`, `Node`, `Edge`) are concrete structs/enums with no trait
+abstraction — they are simple data holders / a single fixed
 implementation with no need for interchangeable strategies. Applying
 patterns where there is no variation to abstract over just adds
 indirection without benefit.

@@ -1,19 +1,24 @@
+//! Thin `syn::Visit` adapter: walks the AST, converts field types via
+//! [`extract_type_expr`], and forwards everything to [`GraphBuilder`].
+
 use syn::visit::Visit;
 
-use crate::model::{Edge, Graph, Node, NodeKind, Relation, TypeExpr};
+use crate::model::Graph;
 use crate::parser::ast_parser::ParsedModule;
+use crate::parser::graph_builder::GraphBuilder;
+use crate::parser::type_extractor::TypeExtractor;
 
 pub struct GraphVisitor<'a> {
-    pub graph: &'a mut Graph,
-    pub module_path: &'a Vec<String>,
+    builder: GraphBuilder<'a>,
+    extractor: TypeExtractor,
     current_struct: Option<String>,
 }
 
 impl<'a> GraphVisitor<'a> {
     pub fn new(graph: &'a mut Graph, module_path: &'a Vec<String>) -> Self {
         Self {
-            graph,
-            module_path,
+            builder: GraphBuilder::new(graph, module_path),
+            extractor: TypeExtractor::new(),
             current_struct: None,
         }
     }
@@ -26,27 +31,15 @@ impl<'a> GraphVisitor<'a> {
 impl<'ast> Visit<'ast> for GraphVisitor<'_> {
     fn visit_item_struct(&mut self, node: &'ast syn::ItemStruct) {
         let name = node.ident.to_string();
-
-        self.graph.nodes.push(Node {
-            name: name.clone(),
-            kind: NodeKind::Struct,
-            module_path: self.module_path.clone(),
-        });
+        self.builder.add_struct(&name);
 
         self.current_struct = Some(name);
-
         syn::visit::visit_item_struct(self, node);
-
         self.current_struct = None;
     }
 
     fn visit_item_trait(&mut self, node: &'ast syn::ItemTrait) {
-        self.graph.nodes.push(Node {
-            name: node.ident.to_string(),
-            kind: NodeKind::Trait,
-            module_path: self.module_path.clone(),
-        });
-
+        self.builder.add_trait(&node.ident.to_string());
         syn::visit::visit_item_trait(self, node);
     }
 
@@ -56,12 +49,7 @@ impl<'ast> Visit<'ast> for GraphVisitor<'_> {
 
             if let syn::Type::Path(tp) = &*node.self_ty {
                 let struct_name = tp.path.segments.last().unwrap().ident.to_string();
-
-                self.graph.edges.push(Edge {
-                    from: struct_name,
-                    to: TypeExpr::Simple(trait_name),
-                    relation: Relation::Implements,
-                });
+                self.builder.add_implements(&struct_name, &trait_name);
             }
         }
 
@@ -69,111 +57,14 @@ impl<'ast> Visit<'ast> for GraphVisitor<'_> {
     }
 
     fn visit_field(&mut self, field: &'ast syn::Field) {
-        let Some(owner) = &self.current_struct else {
+        let Some(owner) = self.current_struct.clone() else {
             return;
         };
 
-        if let Some(type_expr) = extract_type_expr(&field.ty) {
-            self.graph.edges.push(Edge {
-                from: owner.clone(),
-                to: type_expr,
-                relation: Relation::Composition,
-            });
+        if let Some(type_expr) = self.extractor.extract(&field.ty) {
+            self.builder.add_field_type(&owner, &type_expr);
         }
 
         syn::visit::visit_field(self, field);
     }
-}
-
-/// Recursively unwraps wrapper types (`Box`, `Vec`, `Option`, `Arc`, `Rc`,
-/// `RefCell`, `Mutex`) to find the meaningful inner type. Also handles
-/// `dyn Trait` objects by returning the first trait bound name.
-fn extract_type_expr(ty: &syn::Type) -> Option<TypeExpr> {
-match ty {
-    syn::Type::Path(tp) => {
-        let seg = tp.path.segments.last()?;
-        let base = seg.ident.to_string();
-
-        match &seg.arguments {
-            syn::PathArguments::None => {
-                Some(TypeExpr::Simple(base))
-            }
-
-            syn::PathArguments::AngleBracketed(args) => {
-                let mut inner = vec![];
-
-                for arg in &args.args {
-                    if let syn::GenericArgument::Type(inner_ty) = arg {
-                        if let Some(t) = extract_type_expr(inner_ty) {
-                            inner.push(t);
-                        }
-                    }
-                }
-
-                Some(TypeExpr::Generic { base, args: inner })
-            }
-
-            _ => Some(TypeExpr::Simple(base)),
-        }
-    }
-
-    syn::Type::Array(type_array) => {
-        extract_type_expr(&type_array.elem)
-            .map(|inner| TypeExpr::Array(Box::new(inner)))
-    }
-
-    syn::Type::Slice(type_slice) => {
-        extract_type_expr(&type_slice.elem)
-            .map(|inner| TypeExpr::Slice(Box::new(inner)))
-    }
-
-    syn::Type::Reference(type_reference) => {
-        extract_type_expr(&type_reference.elem)
-            .map(|inner| TypeExpr::Reference(Box::new(inner)))
-    }
-
-    syn::Type::Tuple(type_tuple) => {
-        let mut elems = Vec::new();
-        for e in &type_tuple.elems {
-            if let Some(t) = extract_type_expr(e) {
-                elems.push(t);
-            }
-        }
-
-        Some(TypeExpr::Tuple(elems))
-    }
-
-    syn::Type::ImplTrait(type_impl_trait) => {
-        let mut traits: Vec<String> = Vec::new();
-        for b in &type_impl_trait.bounds {
-            if let syn::TypeParamBound::Trait(tr) = b {
-                if let Some(s) = tr.path.segments.last() {
-                    traits.push(s.ident.to_string());
-                }
-            }
-        }
-
-        Some(TypeExpr::ImplTrait(traits))
-    }
-
-    syn::Type::TraitObject(type_trait_object) => {
-        let mut traits: Vec<String> = Vec::new();
-        for b in &type_trait_object.bounds {
-            if let syn::TypeParamBound::Trait(tr) = b {
-                if let Some(s) = tr.path.segments.last() {
-                    traits.push(s.ident.to_string());
-                }
-            }
-        }
-
-        Some(TypeExpr::DynTrait(traits))
-    }
-
-    syn::Type::Group(type_group) => {
-        // just unwrap parentheses grouping
-        extract_type_expr(&type_group.elem)
-    }
-
-    _ => None,
-}
 }
