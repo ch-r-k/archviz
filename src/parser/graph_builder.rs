@@ -1,12 +1,12 @@
 //! Turns a stream of high-level "the source contains …" observations
-//! (`add_struct`, `add_trait`, `add_implements`, `add_field_type`) into
-//! nodes and edges in the shared [`Graph`], including the on-the-fly
+//! (`add_struct`, `add_trait`, `add_enum`, `add_implements`, `add_field_type`)
+//! into nodes and edges in the shared [`Graph`], including the on-the-fly
 //! expansion of compound and trait-wrapper types into synthetic nodes.
 //!
 //! Knows nothing about `syn` — the AST-facing side lives in
 //! [`crate::parser::visitor`].
 
-use crate::model::origin::is_std_name;
+use crate::model::origin::{is_std_name, looks_like_type_param};
 use crate::model::{Edge, Graph, Node, NodeKind, Relation};
 use crate::parser::type_expr::TypeExpr;
 
@@ -21,17 +21,21 @@ impl<'a> GraphBuilder<'a> {
     }
 
     pub fn add_struct(&mut self, name: &str) {
-        self.graph.nodes.push(Node {
-            name: name.to_string(),
-            kind: NodeKind::Struct,
-            module_path: self.module_path.clone(),
-        });
+        self.add_typed_node(name, NodeKind::Struct);
     }
 
     pub fn add_trait(&mut self, name: &str) {
-        self.graph.nodes.push(Node {
+        self.add_typed_node(name, NodeKind::Trait);
+    }
+
+    pub fn add_enum(&mut self, name: &str) {
+        self.add_typed_node(name, NodeKind::Enum);
+    }
+
+    fn add_typed_node(&mut self, name: &str, kind: NodeKind) {
+        self.graph.add_node(Node {
             name: name.to_string(),
-            kind: NodeKind::Trait,
+            kind,
             module_path: self.module_path.clone(),
         });
     }
@@ -58,6 +62,9 @@ impl<'a> GraphBuilder<'a> {
         }
 
         let target = expr.type_name();
+        if looks_like_type_param(&target) {
+            return;
+        }
         self.push_edge(from, &target, relation);
 
         if expr.is_compound() {
@@ -71,11 +78,11 @@ impl<'a> GraphBuilder<'a> {
     /// base node (`Vec<T>`) and a `Specializes` edge.
     fn synthesize(&mut self, expr: &TypeExpr) {
         let name = expr.type_name();
-        if self.has_node(&name) {
+        if self.graph.has_node(&name) {
             return;
         }
 
-        self.graph.nodes.push(Node {
+        self.graph.push_node(Node {
             name: name.clone(),
             kind: NodeKind::Synthetic {
                 params: expr.stereotype_params(),
@@ -99,7 +106,11 @@ impl<'a> GraphBuilder<'a> {
                     }
                 }
                 other => {
-                    self.push_edge(&name, &other.type_name(), Relation::Composition);
+                    let child_name = other.type_name();
+                    if looks_like_type_param(&child_name) {
+                        continue;
+                    }
+                    self.push_edge(&name, &child_name, Relation::Composition);
                     if other.is_compound() {
                         self.synthesize(other);
                     }
@@ -109,7 +120,7 @@ impl<'a> GraphBuilder<'a> {
     }
 
     fn ensure_generic_base(&mut self, base: &str, base_name: &str) {
-        if self.has_node(base_name) {
+        if self.graph.has_node(base_name) {
             return;
         }
         let module_path = if is_std_name(base) {
@@ -117,17 +128,13 @@ impl<'a> GraphBuilder<'a> {
         } else {
             Vec::new()
         };
-        self.graph.nodes.push(Node {
+        self.graph.push_node(Node {
             name: base_name.to_string(),
             kind: NodeKind::Synthetic {
                 params: Some("T".to_string()),
             },
             module_path,
         });
-    }
-
-    fn has_node(&self, name: &str) -> bool {
-        self.graph.nodes.iter().any(|n| n.name == name)
     }
 
     fn push_edge(&mut self, from: &str, to: &str, relation: Relation) {

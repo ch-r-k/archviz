@@ -4,6 +4,8 @@ A prioritized plan derived from an architectural review of archviz. Each
 item lists the problem, the change to make, and where it lands. Phases are
 ordered so earlier items unblock later ones.
 
+**Legend:** `[x]` applied · `[ ]` not yet applied.
+
 ## Summary of findings
 
 **Strengths**
@@ -42,7 +44,7 @@ ordered so earlier items unblock later ones.
 
 ## Phase 1 — Correctness foundations
 
-### 1.1 Wire or remove `error.rs`
+### 1.1 Wire or remove `error.rs` — [x]
 
 - **Problem:** `src/error.rs` defines `ArchError` via `thiserror` but is
   not `mod`-declared in `main.rs`, and `thiserror` is not in
@@ -53,7 +55,7 @@ ordered so earlier items unblock later ones.
   `error.rs` entirely.
 - **Recommendation:** (a).
 
-### 1.2 Fix cross-module node name collisions
+### 1.2 Fix cross-module node name collisions — [ ]
 
 - **Problem:** `Edge.from` / `Edge.to` are unqualified `String`s, so two
   `Foo` structs in different modules collapse and their edges mix.
@@ -66,7 +68,7 @@ ordered so earlier items unblock later ones.
     accordingly.
 - **Impact:** touches every module but the surface stays small.
 
-### 1.3 Add HashSet index for node lookup
+### 1.3 Add HashSet index for node lookup — [x]
 
 - **Problem:** `GraphBuilder::has_node` and `OriginResolver::enrich`
   linear-scan `graph.nodes` on every insert → O(n²) graph construction.
@@ -74,7 +76,7 @@ ordered so earlier items unblock later ones.
   in the builder) and use it for existence checks. Natural once `NodeId`
   exists (1.2).
 
-### 1.4 Handle `lib.rs` / `main.rs` in `compute_module`
+### 1.4 Handle `lib.rs` / `main.rs` in `compute_module` — [x]
 
 - **Problem:** `ProjectLoader::compute_module` strips only `mod.rs`, so
   `src/main.rs` → module_path `["main"]`, wrapping the whole diagram in
@@ -83,7 +85,7 @@ ordered so earlier items unblock later ones.
 
 ## Phase 2 — Feature completeness
 
-### 2.1 Emit enum nodes from AST
+### 2.1 Emit enum nodes from AST — [x]
 
 - **Problem:** `NodeKind::Enum` + PlantUML `enum` rendering exist but
   `GraphVisitor` never handles `syn::ItemEnum`. FR15 is only half done.
@@ -94,7 +96,7 @@ ordered so earlier items unblock later ones.
     fields → composition edges.
   - Flip the FR15 checkbox in `docs/requirements.md`.
 
-### 2.2 Continue on per-file parse errors (FR10)
+### 2.2 Continue on per-file parse errors (FR10) — [x]
 
 - **Problem:** `Pipeline::run` propagates the first `parser.parse(...)?`
   or file-read error and aborts.
@@ -103,7 +105,7 @@ ordered so earlier items unblock later ones.
   - Log a warning to `stderr` for each failure (path + reason).
   - Only fail the run if zero files parsed successfully.
 
-### 2.3 Group nodes by module in renderer
+### 2.3 Group nodes by module in renderer — [x]
 
 - **Problem:** `PlantUmlRenderer::draw_node` opens+closes a `package`
   block per node, producing many disjoint duplicate wrappers.
@@ -115,7 +117,7 @@ ordered so earlier items unblock later ones.
 
 ## Phase 3 — Quality
 
-### 3.1 Add parser + enricher tests (NFR5)
+### 3.1 Add parser + enricher tests (NFR5) — [x]
 
 - **Do:** unit tests for
   - `TypeExtractor` on representative `syn::Type` inputs (references,
@@ -126,7 +128,7 @@ ordered so earlier items unblock later ones.
 - Fixtures via inline `syn::parse_str::<syn::Type>(...)` and
   `syn::parse_file`.
 
-### 3.2 Improve `OriginResolver` precision
+### 3.2 Improve `OriginResolver` precision — [x]
 
 - **Do:**
   - Extract the std name set into a shared `static` (or `phf`) rather
@@ -136,7 +138,7 @@ ordered so earlier items unblock later ones.
   - Consider matching on full path segments (`std::collections::HashMap`)
     once parser tracks `use` statements.
 
-### 3.3 Clean up build warnings
+### 3.3 Clean up build warnings — [x]
 
 - **Do:**
   - Remove unused imports in `pipeline.rs` and `renderer/tests.rs`.
@@ -146,7 +148,7 @@ ordered so earlier items unblock later ones.
   - Either use `SourceFile.path` in error messages (2.2 needs it
     anyway) or drop it.
 
-### 3.4 Sync repo custom-instructions with reality
+### 3.4 Sync repo custom-instructions with reality — [x]
 
 - **Problem:** the guiding doc references `TypeExpr` in
   `src/model/edge.rs` and `enricher/type_expander.rs`, but `TypeExpr`

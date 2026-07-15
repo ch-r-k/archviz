@@ -54,22 +54,28 @@ sync when the pipeline, its stages, or requirements change:
   (`Parser`, `GraphEnricher`, `Renderer`) plus one concrete implementation;
   when adding a new variant, implement the trait rather than special-casing
   inside `Pipeline`.
-- `TypeExpr` recursion (`base_name`, `type_name`, `resolve_refs`) lives as
-  inherent methods on `TypeExpr` itself (`src/model/edge.rs`) — this is the
-  single source of truth for naming/resolving a `TypeExpr`. Both
-  `enricher/type_expander.rs` and `renderer/plantuml.rs` call these methods
-  rather than each maintaining their own copy; add new `TypeExpr` traversal
-  logic there, not as free functions in a consumer module.
+- `TypeExpr` recursion (`type_name`, `resolve_refs`, `children`,
+  `trait_object_names`, `is_compound`, `stereotype_params`) lives as
+  inherent methods on `TypeExpr` itself (`src/parser/type_expr.rs`) —
+  this is the single source of truth for naming/resolving a `TypeExpr`.
+  Both `parser/graph_builder.rs` (which now owns compound-type
+  synthesis) and `renderer/plantuml.rs` call these methods rather than
+  each maintaining their own copy; add new `TypeExpr` traversal logic
+  there, not as free functions in a consumer module.
 - Prefer several small, single-purpose functions over one large function
-  (e.g. `TypeExpander::enrich` delegates to `existing_node_names`,
-  `node_module_index`, and `direct_trait_edges` rather than inlining all of
-  that logic). As a rule of thumb, keep the number of public
-  methods/fields on a struct/trait and the number of responsibilities in a
-  function within about 5–9 — the range people can hold in mind at once —
-  splitting further when it grows beyond that.
-- Renderer tests live in `src/renderer/tests.rs`, registered via `mod tests;`
-  in `renderer/mod.rs` (not `#[cfg(test)] mod tests` inline).
-- `src/error.rs` defines `ArchError` via `thiserror`, but `thiserror` is not
-  a declared dependency and the module isn't wired into `main.rs` — treat it
-  as unfinished/dead code, not a pattern to follow; errors currently
-  propagate via `anyhow::Result`.
+  (e.g. `GraphBuilder::record_type` delegates to `synthesize` and
+  `ensure_generic_base` rather than inlining all of that logic). As a
+  rule of thumb, keep the number of public methods/fields on a
+  struct/trait and the number of responsibilities in a function within
+  about 5–9 — the range people can hold in mind at once — splitting
+  further when it grows beyond that.
+- Renderer/parser/enricher tests live in `src/<stage>/tests.rs`,
+  registered via `mod tests;` in the stage's `mod.rs` and gated with
+  `#![cfg(test)]` at the top of the tests file (not `#[cfg(test)] mod
+  tests` inline).
+- `src/error.rs` defines `ArchError` via `thiserror` and is wired into
+  `main.rs`; stage traits (`Parser::parse`, `ProjectLoader::load`) return
+  `Result<_, ArchError>` so callers can distinguish IO from parse
+  failures. `Pipeline::run` maps these into `anyhow::Result` at the
+  boundary and logs per-file warnings to stderr instead of aborting on
+  the first bad file.

@@ -1,6 +1,7 @@
-use anyhow::Result;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
+
+use crate::error::ArchError;
 
 use super::source_file::SourceFile;
 
@@ -13,11 +14,11 @@ impl ProjectLoader {
         Self { root: root.into() }
     }
 
-    pub fn load(&self) -> Result<Vec<SourceFile>> {
+    pub fn load(&self) -> Result<Vec<SourceFile>, ArchError> {
         let mut files = Vec::new();
 
         for entry in WalkDir::new(&self.root) {
-            let entry = entry?;
+            let entry = entry.map_err(|e| ArchError::Io(e.into()))?;
 
             if !entry.file_type().is_file() {
                 continue;
@@ -52,12 +53,12 @@ fn compute_module(root: &Path, file: &Path) -> Vec<String> {
     }
 
     if let Some(last) = parts.last_mut() {
-        if last == "mod.rs" {
+        if last == "mod.rs" || last == "lib.rs" || last == "main.rs" {
             parts.pop();
         } else if last.ends_with(".rs") {
             *last = last.trim_end_matches(".rs").to_string();
         }
     }
 
-   parts
+    parts
 }

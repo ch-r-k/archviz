@@ -3,6 +3,7 @@
 //! the pipeline sees only stringly-typed [`crate::model::Edge`]s.
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum TypeExpr {
     Simple(String),
     Generic { base: String, args: Vec<TypeExpr> },
@@ -14,6 +15,9 @@ pub enum TypeExpr {
     DynTrait(Vec<String>),
     ImplTrait(Vec<String>),
 
+    /// Placeholder for a `syn::Type` variant archviz does not model
+    /// (function pointers, macros, etc.). Reserved for future extractor
+    /// enhancements.
     Unknown,
 }
 

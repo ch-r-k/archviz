@@ -11,54 +11,36 @@ impl Renderer for PlantUmlRenderer {
     fn postamble(&self) -> String {
         "\n@enduml\n".to_string()
     }
+
+    fn open_package(&self, name: &str) -> String {
+        format!("package \"{}\" {{\n", name)
+    }
+
+    fn close_package(&self) -> String {
+        "}\n\n".to_string()
+    }
 }
 
 impl DrawNode for PlantUmlRenderer {
     fn draw_node(&self, node: &Node) -> String {
-        let mut out = String::new();
-
-        for module in &node.module_path {
-            out.push_str(&format!("package \"{}\" {{\n", module));
-        }
-
         match &node.kind {
-            NodeKind::Struct => {
-                out.push_str(&format!("class {}\n", quoted(&node.name)));
-            }
-            NodeKind::Trait => {
-                out.push_str(&format!("interface {}\n", quoted(&node.name)));
-            }
-            NodeKind::Enum => {
-                out.push_str(&format!("enum {}\n", quoted(&node.name)));
-            }
+            NodeKind::Struct => format!("class {}\n", quoted(&node.name)),
+            NodeKind::Trait => format!("interface {}\n", quoted(&node.name)),
+            NodeKind::Enum => format!("enum {}\n", quoted(&node.name)),
             NodeKind::Impl {
                 trait_name: Some(t),
-            } => {
-                out.push_str(&format!("class {} < {} >\n", quoted(&node.name), t));
-            }
+            } => format!("class {} < {} >\n", quoted(&node.name), t),
             NodeKind::Impl { trait_name: None } => {
-                out.push_str(&format!("class {} \n", quoted(&node.name)));
+                format!("class {} \n", quoted(&node.name))
             }
-            NodeKind::TypeAlias => {
-                out.push_str(&format!("class {} < type >\n", quoted(&node.name)));
-            }
+            NodeKind::TypeAlias => format!("class {} < type >\n", quoted(&node.name)),
             NodeKind::Synthetic { params: Some(params) } => {
-                out.push_str(&format!(
-                    "class {} <{}>\n",
-                    quoted(&node.name),
-                    params
-                ));
+                format!("class {} <{}>\n", quoted(&node.name), params)
             }
             NodeKind::Synthetic { params: None } => {
-                out.push_str(&format!("class {}\n", quoted(&node.name)));
+                format!("class {}\n", quoted(&node.name))
             }
         }
-
-        for _ in &node.module_path {
-            out.push_str("}\n\n");
-        }
-
-        out
     }
 }
 

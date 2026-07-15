@@ -1,4 +1,5 @@
 mod enricher;
+mod error;
 mod model;
 mod parser;
 mod pipeline;

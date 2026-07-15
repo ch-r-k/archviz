@@ -1,4 +1,5 @@
 pub mod origin_resolver;
+mod tests;
 
 use crate::model::Graph;
 

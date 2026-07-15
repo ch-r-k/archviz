@@ -40,12 +40,12 @@ that item for what's missing).
   generics, arrays, slices, tuples, `dyn Trait`, and `impl Trait` — into
   their constituent parts so that relationships to the underlying types
   are captured, not just the outermost type.
-- [ ] FR10: The tool shall continue processing remaining files if parsing
+- [x] FR10: The tool shall continue processing remaining files if parsing
   an individual file succeeds, and shall surface a clear error if a file
   cannot be parsed or read.
-  > Not implemented: `Pipeline::run` propagates the first parse/read error
-  > with `?` and aborts the whole run instead of skipping the offending
-  > file and continuing with the rest.
+  > Implemented: `Pipeline::run` collects per-file results, logs a warning
+  > to stderr for each failed file (path + reason), and only aborts the
+  > whole run if zero files parse successfully.
 
 ### Enrichment
 
@@ -64,13 +64,12 @@ that item for what's missing).
 
 - [x] FR14: The tool shall render the analyzed and enriched model as
   diagram markup that can be consumed by an external UML rendering tool.
-- [ ] FR15: The default output format shall be PlantUML class-diagram
+- [x] FR15: The default output format shall be PlantUML class-diagram
   syntax, representing structs as `class`, traits as `interface`, and
   enums as `enum`.
-  > Partially implemented: `PlantUmlRenderer` already has rendering logic
-  > for `NodeKind::Enum`, but the parser's `GraphVisitor` never visits
-  > `enum` items or creates `Enum` nodes, so enums are not yet extracted
-  > from source and never reach the renderer.
+  > Implemented: `GraphVisitor` now visits `syn::ItemEnum`, `GraphBuilder`
+  > has `add_enum`, and enum variants' typed fields are recorded as
+  > composition edges from the enum node.
 - [x] FR16: The rendered output shall group nodes into nested packages
   reflecting their module path, so the diagram reflects the project's
   module structure.
@@ -99,11 +98,12 @@ that item for what's missing).
 - [x] NFR4: The tool's behavior shall be deterministic for a given input
   directory — running it twice on unchanged source shall produce
   identical output.
-- [ ] NFR5: The codebase shall have automated tests covering the parsing,
+- [x] NFR5: The codebase shall have automated tests covering the parsing,
   enrichment, and rendering stages, runnable via `cargo test`.
-  > Partially implemented: automated tests exist only for the renderer
-  > (`src/renderer/tests.rs`); the parser/visitor and enricher stages
-  > currently have no dedicated tests.
+  > Implemented: unit tests exist for the renderer
+  > (`src/renderer/tests.rs`), the parser's `TypeExtractor`
+  > (`src/parser/tests.rs`), and the enricher's `OriginResolver`
+  > (`src/enricher/tests.rs`).
 - [x] NFR6: Each struct/trait shall expose a small, human-trackable number
   of members (fields/methods) — roughly 5–9 (Miller's "seven, plus or
   minus two") — with logic beyond that split into smaller, well-named

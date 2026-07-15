@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::enricher::GraphEnricher;
-use crate::model::origin::{classify, TypeOrigin};
+use crate::model::origin::{classify, looks_like_type_param, TypeOrigin};
 use crate::model::{Graph, Node, NodeKind};
 
 /// Iterates every edge target, classifies the referenced type as `Local`
@@ -24,15 +24,15 @@ impl GraphEnricher for OriginResolver {
             maybe_emit(&edge.to, &local_names, &mut created, &mut new_nodes);
         }
 
-        graph.nodes.extend(new_nodes);
+        for node in new_nodes {
+            graph.push_node(node);
+        }
     }
 }
 
 /// Emits a synthetic node for `name` if it isn't already present locally
 /// and hasn't been emitted during this pass. Skips things that look like
-/// generic type parameters (single upper-case letter or letter+digit —
-/// `T`, `K`, `V`, `E`, `R`, `T1`) since those don't correspond to real
-/// types.
+/// generic type parameters (see [`looks_like_type_param`]).
 fn maybe_emit(
     name: &str,
     local_names: &HashSet<String>,
@@ -53,13 +53,4 @@ fn maybe_emit(
         module_path,
     });
     created.insert(name.to_string());
-}
-
-fn looks_like_type_param(name: &str) -> bool {
-    let mut chars = name.chars();
-    match (chars.next(), chars.next(), chars.next()) {
-        (Some(c), None, _) => c.is_ascii_uppercase(),
-        (Some(c), Some(d), None) => c.is_ascii_uppercase() && d.is_ascii_digit(),
-        _ => false,
-    }
 }

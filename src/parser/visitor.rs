@@ -38,6 +38,24 @@ impl<'ast> Visit<'ast> for GraphVisitor<'_> {
         self.current_struct = None;
     }
 
+    fn visit_item_enum(&mut self, node: &'ast syn::ItemEnum) {
+        let name = node.ident.to_string();
+        self.builder.add_enum(&name);
+
+        // Treat each variant's payload fields as composition edges from
+        // the enum, mirroring how struct fields are handled.
+        self.current_struct = Some(name);
+        for variant in &node.variants {
+            for field in &variant.fields {
+                if let Some(type_expr) = self.extractor.extract(&field.ty) {
+                    let owner = self.current_struct.clone().unwrap();
+                    self.builder.add_field_type(&owner, &type_expr);
+                }
+            }
+        }
+        self.current_struct = None;
+    }
+
     fn visit_item_trait(&mut self, node: &'ast syn::ItemTrait) {
         self.builder.add_trait(&node.ident.to_string());
         syn::visit::visit_item_trait(self, node);

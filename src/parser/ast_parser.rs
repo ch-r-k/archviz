@@ -1,8 +1,8 @@
-use anyhow::Result;
 use syn::File;
 
-use crate::project::SourceFile;
+use crate::error::ArchError;
 use crate::parser::Parser;
+use crate::project::SourceFile;
 
 pub struct ParsedModule {
     pub module_path: Vec<String>,
@@ -12,7 +12,7 @@ pub struct ParsedModule {
 pub struct AstParser;
 
 impl Parser for AstParser {
-    fn parse(&self, file: SourceFile) -> Result<ParsedModule> {
+    fn parse(&self, file: SourceFile) -> Result<ParsedModule, ArchError> {
         let ast = syn::parse_file(&file.source)?;
 
         Ok(ParsedModule {
