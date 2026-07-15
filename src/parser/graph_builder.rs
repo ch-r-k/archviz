@@ -5,7 +5,14 @@
 //!
 //! Knows nothing about `syn` — the AST-facing side lives in
 //! [`crate::parser::visitor`].
+//!
+//! **Naming:** source-level nodes (`add_struct` / `add_trait` /
+//! `add_enum`) get a fully-qualified [`NodeId`] so two `Foo`s in
+//! different modules stay distinct. Synthetic nodes for compound types
+//! and edge targets use a bare `NodeId` — a later resolution pass on the
+//! whole graph promotes them to FQ ids when unambiguous.
 
+use crate::model::node::NodeId;
 use crate::model::origin::{is_std_name, looks_like_type_param};
 use crate::model::{Edge, Graph, Node, NodeKind, Relation};
 use crate::parser::type_expr::TypeExpr;
@@ -34,7 +41,8 @@ impl<'a> GraphBuilder<'a> {
 
     fn add_typed_node(&mut self, name: &str, kind: NodeKind) {
         self.graph.add_node(Node {
-            name: name.to_string(),
+            id: NodeId::from_parts(self.module_path, name),
+            display_name: name.to_string(),
             kind,
             module_path: self.module_path.clone(),
         });
@@ -78,12 +86,14 @@ impl<'a> GraphBuilder<'a> {
     /// base node (`Vec<T>`) and a `Specializes` edge.
     fn synthesize(&mut self, expr: &TypeExpr) {
         let name = expr.type_name();
-        if self.graph.has_node(&name) {
+        let id = NodeId::bare(&name);
+        if self.graph.has_node(&id) {
             return;
         }
 
         self.graph.push_node(Node {
-            name: name.clone(),
+            id: id.clone(),
+            display_name: name.clone(),
             kind: NodeKind::Synthetic {
                 params: expr.stereotype_params(),
             },
@@ -94,7 +104,7 @@ impl<'a> GraphBuilder<'a> {
             if !args.is_empty() && !is_placeholder_base(args) {
                 let base_name = format!("{}<T>", base);
                 self.ensure_generic_base(base, &base_name);
-                self.push_edge(&name, &base_name, Relation::Specializes);
+                self.push_synthetic_edge(&id, &base_name, Relation::Specializes);
             }
         }
 
@@ -102,7 +112,7 @@ impl<'a> GraphBuilder<'a> {
             match child {
                 TypeExpr::DynTrait(traits) | TypeExpr::ImplTrait(traits) => {
                     for t in traits {
-                        self.push_edge(&name, t, Relation::Composition);
+                        self.push_synthetic_edge(&id, t, Relation::Composition);
                     }
                 }
                 other => {
@@ -110,7 +120,7 @@ impl<'a> GraphBuilder<'a> {
                     if looks_like_type_param(&child_name) {
                         continue;
                     }
-                    self.push_edge(&name, &child_name, Relation::Composition);
+                    self.push_synthetic_edge(&id, &child_name, Relation::Composition);
                     if other.is_compound() {
                         self.synthesize(other);
                     }
@@ -120,7 +130,8 @@ impl<'a> GraphBuilder<'a> {
     }
 
     fn ensure_generic_base(&mut self, base: &str, base_name: &str) {
-        if self.graph.has_node(base_name) {
+        let id = NodeId::bare(base_name);
+        if self.graph.has_node(&id) {
             return;
         }
         let module_path = if is_std_name(base) {
@@ -129,7 +140,8 @@ impl<'a> GraphBuilder<'a> {
             Vec::new()
         };
         self.graph.push_node(Node {
-            name: base_name.to_string(),
+            id,
+            display_name: base_name.to_string(),
             kind: NodeKind::Synthetic {
                 params: Some("T".to_string()),
             },
@@ -137,10 +149,24 @@ impl<'a> GraphBuilder<'a> {
         });
     }
 
+    /// Emits an edge from a source-level owner (fully-qualified by the
+    /// current module path) to a target referenced by its bare name — the
+    /// bare target will be resolved to a real [`NodeId`] later by
+    /// [`crate::pipeline::resolve_edge_targets`].
     fn push_edge(&mut self, from: &str, to: &str, relation: Relation) {
         self.graph.edges.push(Edge {
-            from: from.to_string(),
-            to: to.to_string(),
+            from: NodeId::from_parts(self.module_path, from),
+            to: NodeId::bare(to),
+            relation,
+        });
+    }
+
+    /// Emits an edge whose source is already a resolved (synthetic)
+    /// [`NodeId`]; the target stays bare until resolution.
+    fn push_synthetic_edge(&mut self, from: &NodeId, to: &str, relation: Relation) {
+        self.graph.edges.push(Edge {
+            from: from.clone(),
+            to: NodeId::bare(to),
             relation,
         });
     }

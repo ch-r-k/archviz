@@ -1,8 +1,6 @@
+pub mod edge_target_resolver;
 pub mod origin_resolver;
+pub mod traits;
 mod tests;
 
-use crate::model::Graph;
-
-pub trait GraphEnricher {
-    fn enrich(&self, graph: &mut Graph);
-}
+pub use traits::GraphEnricher;

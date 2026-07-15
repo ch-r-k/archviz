@@ -1,3 +1,5 @@
+use super::node::NodeId;
+
 #[derive(Debug, Clone)]
 pub enum Relation {
     Composition,
@@ -9,7 +11,7 @@ pub enum Relation {
 
 #[derive(Debug, Clone)]
 pub struct Edge {
-    pub from: String,
-    pub to: String,
+    pub from: NodeId,
+    pub to: NodeId,
     pub relation: Relation,
 }

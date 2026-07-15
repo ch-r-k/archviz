@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 
 use crate::enricher::GraphEnricher;
+use crate::enricher::edge_target_resolver::EdgeTargetResolver;
 use crate::enricher::origin_resolver::OriginResolver;
 use crate::model::Graph;
 use crate::parser::visitor::GraphVisitor;
@@ -75,7 +76,10 @@ impl PipelineBuilder {
         Self {
             root: root.into(),
             parser: Box::new(AstParser),
-            enrichers: vec![Box::new(OriginResolver)],
+            // Order matters: EdgeTargetResolver must run before
+            // OriginResolver so that std/external stubs are only
+            // created for genuinely unresolved bare targets.
+            enrichers: vec![Box::new(EdgeTargetResolver), Box::new(OriginResolver)],
             renderer: Box::new(PlantUmlRenderer),
         }
     }

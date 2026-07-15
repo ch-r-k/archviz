@@ -1,30 +1,35 @@
 #![cfg(test)]
 
+use crate::model::node::NodeId;
 use crate::model::{Edge, Graph, Node, NodeKind, Relation};
 use crate::renderer::plantuml::PlantUmlRenderer;
 use crate::renderer::{DrawEdge, DrawNode, Renderer};
 
+fn node_bare(name: &str, kind: NodeKind, module: Vec<String>) -> Node {
+    Node {
+        id: NodeId::from_parts(&module, name),
+        display_name: name.into(),
+        kind,
+        module_path: module,
+    }
+}
+
 #[test]
 fn draw_struct_node_with_packages() {
     let renderer = PlantUmlRenderer;
-
-    let package_name_1 = "outer";
-    let package_name_2 = "inner";
-    let class_name = "my_class";
-
     let mut graph = Graph::default();
-    graph.add_node(Node {
-        name: class_name.into(),
-        kind: NodeKind::Struct,
-        module_path: vec![package_name_1.into(), package_name_2.into()],
-    });
+    graph.add_node(node_bare(
+        "my_class",
+        NodeKind::Struct,
+        vec!["outer".into(), "inner".into()],
+    ));
 
     let out = renderer.render(&graph);
-
+    let expected_inner = "class my_class as \"outer::inner::my_class\"\n";
     assert!(
         out.contains(&format!(
-            "package \"{}\" {{\npackage \"{}\" {{\nclass {}\n}}\n\n}}\n\n",
-            package_name_1, package_name_2, class_name
+            "package \"outer\" {{\npackage \"inner\" {{\n{}}}\n\n}}\n\n",
+            expected_inner
         )),
         "unexpected render output:\n{}",
         out
@@ -34,83 +39,55 @@ fn draw_struct_node_with_packages() {
 #[test]
 fn groups_multiple_nodes_in_same_module() {
     let renderer = PlantUmlRenderer;
-
     let mut graph = Graph::default();
-    graph.add_node(Node {
-        name: "A".into(),
-        kind: NodeKind::Struct,
-        module_path: vec!["m".into()],
-    });
-    graph.add_node(Node {
-        name: "B".into(),
-        kind: NodeKind::Struct,
-        module_path: vec!["m".into()],
-    });
+    graph.add_node(node_bare("A", NodeKind::Struct, vec!["m".into()]));
+    graph.add_node(node_bare("B", NodeKind::Struct, vec!["m".into()]));
 
     let out = renderer.render(&graph);
     let opens = out.matches("package \"m\" {").count();
     assert_eq!(opens, 1, "expected one package block, got {opens} in:\n{out}");
-    assert!(out.contains("class A\n"));
-    assert!(out.contains("class B\n"));
+    assert!(out.contains("class A as \"m::A\"\n"));
+    assert!(out.contains("class B as \"m::B\"\n"));
 }
 
 #[test]
 fn draw_trait_node() {
     let renderer = PlantUmlRenderer;
-    let trait_name = "my_trait";
-    let node = Node {
-        name: trait_name.into(),
-        kind: NodeKind::Trait,
-        module_path: vec![],
-    };
-    assert_eq!(
-        renderer.draw_node(&node),
-        format!("interface {}\n", trait_name)
-    );
+    let node = node_bare("my_trait", NodeKind::Trait, vec![]);
+    assert_eq!(renderer.draw_node(&node), "interface my_trait\n");
 }
 
 #[test]
 fn draw_implement_node() {
     let renderer = PlantUmlRenderer;
-    let trait_name = "my_trait";
-    let impl_name = "my_impl";
     let node = Node {
-        name: impl_name.into(),
+        id: NodeId::bare("my_impl"),
+        display_name: "my_impl".into(),
         kind: NodeKind::Impl {
-            trait_name: Some(trait_name.into()),
+            trait_name: Some("my_trait".into()),
         },
         module_path: vec![],
     };
     assert_eq!(
         renderer.draw_node(&node),
-        format!("class {} < {} >\n", impl_name, trait_name)
+        "class my_impl < my_trait >\n".to_string()
     );
 }
 
 #[test]
 fn draw_enum_node() {
     let renderer = PlantUmlRenderer;
-    let enum_name = "my_enum";
-    let node = Node {
-        name: enum_name.into(),
-        kind: NodeKind::Enum,
-        module_path: vec![],
-    };
-    assert_eq!(renderer.draw_node(&node), format!("enum {}\n", enum_name));
+    let node = node_bare("my_enum", NodeKind::Enum, vec![]);
+    assert_eq!(renderer.draw_node(&node), "enum my_enum\n");
 }
 
 #[test]
 fn draw_type_alias_node() {
     let renderer = PlantUmlRenderer;
-    let alias_name = "MyAlias";
-    let node = Node {
-        name: alias_name.into(),
-        kind: NodeKind::TypeAlias,
-        module_path: vec![],
-    };
+    let node = node_bare("MyAlias", NodeKind::TypeAlias, vec![]);
     assert_eq!(
         renderer.draw_node(&node),
-        format!("class {} < type >\n", alias_name)
+        "class MyAlias < type >\n".to_string()
     );
 }
 
@@ -118,7 +95,8 @@ fn draw_type_alias_node() {
 fn draw_synthetic_node_with_expr() {
     let renderer = PlantUmlRenderer;
     let node = Node {
-        name: "Vec<String>".into(),
+        id: NodeId::bare("Vec<String>"),
+        display_name: "Vec<String>".into(),
         kind: NodeKind::Synthetic {
             params: Some("String".to_string()),
         },
@@ -133,24 +111,21 @@ fn draw_synthetic_node_with_expr() {
 #[test]
 fn draw_synthetic_node_without_expr() {
     let renderer = PlantUmlRenderer;
-    let synthetic_name = "SomeType";
     let node = Node {
-        name: synthetic_name.into(),
+        id: NodeId::bare("SomeType"),
+        display_name: "SomeType".into(),
         kind: NodeKind::Synthetic { params: None },
         module_path: vec![],
     };
-    assert_eq!(
-        renderer.draw_node(&node),
-        format!("class {}\n", synthetic_name)
-    );
+    assert_eq!(renderer.draw_node(&node), "class SomeType\n".to_string());
 }
 
 #[test]
 fn draw_composition_edge() {
     let renderer = PlantUmlRenderer;
     let edge = Edge {
-        from: "User".to_string(),
-        to: "Profile".to_string(),
+        from: NodeId::bare("User"),
+        to: NodeId::bare("Profile"),
         relation: Relation::Composition,
     };
     assert_eq!(
@@ -160,11 +135,25 @@ fn draw_composition_edge() {
 }
 
 #[test]
+fn draw_composition_edge_with_fq_ids() {
+    let renderer = PlantUmlRenderer;
+    let edge = Edge {
+        from: NodeId("m1::A".into()),
+        to: NodeId("m2::B".into()),
+        relation: Relation::Composition,
+    };
+    assert_eq!(
+        renderer.draw_edge(&edge),
+        "\"m1::A\" --> \"m2::B\" : contains\n".to_string()
+    );
+}
+
+#[test]
 fn draw_composition_edge_with_generic_type() {
     let renderer = PlantUmlRenderer;
     let edge = Edge {
-        from: "Repository".to_string(),
-        to: "Vec<Item>".to_string(),
+        from: NodeId::bare("Repository"),
+        to: NodeId::bare("Vec<Item>"),
         relation: Relation::Composition,
     };
     assert_eq!(
@@ -177,8 +166,8 @@ fn draw_composition_edge_with_generic_type() {
 fn draw_implements_edge() {
     let renderer = PlantUmlRenderer;
     let edge = Edge {
-        from: "MyStruct".to_string(),
-        to: "Debug".to_string(),
+        from: NodeId::bare("MyStruct"),
+        to: NodeId::bare("Debug"),
         relation: Relation::Implements,
     };
     assert_eq!(
@@ -191,8 +180,8 @@ fn draw_implements_edge() {
 fn draw_specializes_edge() {
     let renderer = PlantUmlRenderer;
     let edge = Edge {
-        from: "Vec<String>".to_string(),
-        to: "Vec<T>".to_string(),
+        from: NodeId::bare("Vec<String>"),
+        to: NodeId::bare("Vec<T>"),
         relation: Relation::Specializes,
     };
     assert_eq!(
@@ -205,7 +194,8 @@ fn draw_specializes_edge() {
 fn draw_node_with_special_chars_in_name() {
     let renderer = PlantUmlRenderer;
     let node = Node {
-        name: "Vec<String>".into(),
+        id: NodeId::bare("Vec<String>"),
+        display_name: "Vec<String>".into(),
         kind: NodeKind::Struct,
         module_path: vec![],
     };

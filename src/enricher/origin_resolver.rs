@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use crate::enricher::GraphEnricher;
+use crate::model::node::NodeId;
 use crate::model::origin::{classify, looks_like_type_param, TypeOrigin};
 use crate::model::{Graph, Node, NodeKind};
 
@@ -16,7 +17,18 @@ pub struct OriginResolver;
 
 impl GraphEnricher for OriginResolver {
     fn enrich(&self, graph: &mut Graph) {
-        let local_names: HashSet<String> = graph.nodes.iter().map(|n| n.name.clone()).collect();
+        // Any node that already exists — matched by either its `id` or
+        // its `display_name` — counts as "local" for the purposes of
+        // origin classification. Cross-module bare edge targets (which
+        // resolution left as bare `NodeId`s because of an ambiguous
+        // display name) match via `display_name` and must not be
+        // duplicated as external stubs.
+        let mut local_names: HashSet<String> = HashSet::new();
+        for n in &graph.nodes {
+            local_names.insert(n.display_name.clone());
+            local_names.insert(n.id.0.clone());
+        }
+
         let mut created: HashSet<String> = HashSet::new();
         let mut new_nodes: Vec<Node> = Vec::new();
 
@@ -30,15 +42,13 @@ impl GraphEnricher for OriginResolver {
     }
 }
 
-/// Emits a synthetic node for `name` if it isn't already present locally
-/// and hasn't been emitted during this pass. Skips things that look like
-/// generic type parameters (see [`looks_like_type_param`]).
 fn maybe_emit(
-    name: &str,
+    target: &NodeId,
     local_names: &HashSet<String>,
     created: &mut HashSet<String>,
     new_nodes: &mut Vec<Node>,
 ) {
+    let name = target.as_str();
     if created.contains(name) || looks_like_type_param(name) {
         return;
     }
@@ -48,7 +58,8 @@ fn maybe_emit(
     };
 
     new_nodes.push(Node {
-        name: name.to_string(),
+        id: target.clone(),
+        display_name: name.to_string(),
         kind: NodeKind::Synthetic { params: None },
         module_path,
     });

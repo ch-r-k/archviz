@@ -54,6 +54,16 @@ sync when the pipeline, its stages, or requirements change:
   (`Parser`, `GraphEnricher`, `Renderer`) plus one concrete implementation;
   when adding a new variant, implement the trait rather than special-casing
   inside `Pipeline`.
+- Each stage's public trait(s) live in a dedicated `traits.rs` file
+  inside the stage (`src/<stage>/traits.rs`) and are re-exported from
+  the stage's `mod.rs` with `pub use traits::…`. Do not define
+  `pub trait` items inline in `mod.rs`. When a stage has multiple
+  related traits (e.g. `DrawNode` + `DrawEdge` + `Renderer`) they may
+  share one `traits.rs`.
+- All tests for a stage live in a single `src/<stage>/tests.rs` file,
+  gated at the top with `#![cfg(test)]` and registered via `mod tests;`
+  in the stage's `mod.rs`. Do not scatter `#[cfg(test)] mod tests { …
+  }` blocks inline in the implementation files.
 - `TypeExpr` recursion (`type_name`, `resolve_refs`, `children`,
   `trait_object_names`, `is_compound`, `stereotype_params`) lives as
   inherent methods on `TypeExpr` itself (`src/parser/type_expr.rs`) —
@@ -69,13 +79,21 @@ sync when the pipeline, its stages, or requirements change:
   struct/trait and the number of responsibilities in a function within
   about 5–9 — the range people can hold in mind at once — splitting
   further when it grows beyond that.
-- Renderer/parser/enricher tests live in `src/<stage>/tests.rs`,
-  registered via `mod tests;` in the stage's `mod.rs` and gated with
-  `#![cfg(test)]` at the top of the tests file (not `#[cfg(test)] mod
-  tests` inline).
 - `src/error.rs` defines `ArchError` via `thiserror` and is wired into
   `main.rs`; stage traits (`Parser::parse`, `ProjectLoader::load`) return
   `Result<_, ArchError>` so callers can distinguish IO from parse
   failures. `Pipeline::run` maps these into `anyhow::Result` at the
   boundary and logs per-file warnings to stderr instead of aborting on
   the first bad file.
+- Graph identity is carried by `NodeId` (`src/model/node.rs`), a
+  newtype over `String`. Source-level nodes get a fully-qualified id
+  (`"a::b::Foo"`) from `NodeId::from_parts(module_path, name)`, so two
+  same-named items in different modules stay distinct; synthetic nodes
+  and unresolved edge targets use `NodeId::bare(name)`. The parser
+  emits edge targets as bare ids; the `EdgeTargetResolver` enricher
+  (`src/enricher/edge_target_resolver.rs`) runs first in the default
+  chain and rewrites them to FQ ids (preferring the owner's own module
+  when a display name is ambiguous), so `OriginResolver` only sees
+  genuinely unresolved targets. The renderer uses PlantUML
+  `class "<display>" as "<id>"` aliases so edges can reference the FQ
+  id.

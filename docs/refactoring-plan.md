@@ -55,7 +55,7 @@ ordered so earlier items unblock later ones.
   `error.rs` entirely.
 - **Recommendation:** (a).
 
-### 1.2 Fix cross-module node name collisions — [ ]
+### 1.2 Fix cross-module node name collisions — [x]
 
 - **Problem:** `Edge.from` / `Edge.to` are unqualified `String`s, so two
   `Foo` structs in different modules collapse and their edges mix.
