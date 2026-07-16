@@ -25,7 +25,7 @@ fn draw_struct_node_with_packages() {
     ));
 
     let out = renderer.render(&graph);
-    let expected_inner = "class my_class as \"outer::inner::my_class\"\n";
+    let expected_inner = "class \"my_class\" as outer__inner__my_class\n";
     assert!(
         out.contains(&format!(
             "package \"outer\" {{\npackage \"inner\" {{\n{}}}\n\n}}\n\n",
@@ -46,8 +46,8 @@ fn groups_multiple_nodes_in_same_module() {
     let out = renderer.render(&graph);
     let opens = out.matches("package \"m\" {").count();
     assert_eq!(opens, 1, "expected one package block, got {opens} in:\n{out}");
-    assert!(out.contains("class A as \"m::A\"\n"));
-    assert!(out.contains("class B as \"m::B\"\n"));
+    assert!(out.contains("class \"A\" as m__A\n"));
+    assert!(out.contains("class \"B\" as m__B\n"));
 }
 
 #[test]
@@ -144,7 +144,7 @@ fn draw_composition_edge_with_fq_ids() {
     };
     assert_eq!(
         renderer.draw_edge(&edge),
-        "\"m1::A\" --> \"m2::B\" : contains\n".to_string()
+        "m1__A --> m2__B : contains\n".to_string()
     );
 }
 
