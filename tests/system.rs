@@ -309,3 +309,27 @@ fn literal_include_covers_descendants_on_self() {
         "referenced std stub was dropped:\n{out}"
     );
 }
+
+#[test]
+fn depth1_view_of_self_has_no_bogus_model_parser_edge() {
+    // Regression: `model --> parser` used to appear in the
+    // `--collapse-depth 1` architecture view purely because a shared
+    // compound type (`Option<String>`) was first synthesized in a
+    // parser file. Compound types now live under `std`, so no such
+    // false dependency edge should appear.
+    let out = run_archviz(&["src", "--collapse-depth", "1"]);
+    write_artifact("archviz_self_collapse_depth_1_regression", &out);
+
+    assert_plantuml_envelope(&out);
+    assert!(
+        !out.contains("model --> parser"),
+        "spurious `model --> parser` edge in depth-1 view:\n{out}"
+    );
+    // `parser --> model` is legitimate (GraphBuilder holds &mut Graph)
+    // and should still be there — this asserts the fix didn't
+    // accidentally hide real dependencies.
+    assert!(
+        out.contains("parser --> model"),
+        "legitimate `parser --> model` edge missing:\n{out}"
+    );
+}

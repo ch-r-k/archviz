@@ -97,7 +97,17 @@ impl<'a> GraphBuilder<'a> {
             kind: NodeKind::Synthetic {
                 params: expr.stereotype_params(),
             },
-            module_path: self.module_path.clone(),
+            // Compound types are shared across the whole project (a
+            // `Vec<String>` referenced from two modules is the same
+            // node — `Graph::push_node` dedupes by id). Colocating them
+            // with the *first* module that happened to be parsed
+            // produces filesystem-order-dependent artifacts in a
+            // collapsed diagram (e.g. `model --> parser` appearing
+            // just because `Option<String>` was first seen in
+            // `parser::visitor`). Assign a neutral home instead:
+            // std-based generics go under `std` next to their generic
+            // base (`Vec<T>`), everything else lives at the root.
+            module_path: compound_module_path(expr),
         });
 
         if let TypeExpr::Generic { base, args } = expr {
@@ -174,4 +184,20 @@ impl<'a> GraphBuilder<'a> {
 
 fn is_placeholder_base(args: &[TypeExpr]) -> bool {
     args.len() == 1 && matches!(&args[0], TypeExpr::Simple(s) if s == "T")
+}
+
+/// The module path a compound synthetic node ([`TypeExpr::Generic`],
+/// tuples, slices, arrays) should live under. Generic types whose base
+/// is a std name go under `std` next to their generic base
+/// (`Vec<String>` and `Vec<T>` in the same package); everything else
+/// gets an empty path so it renders at the diagram root and doesn't
+/// masquerade as belonging to whichever module first happened to
+/// reference it.
+fn compound_module_path(expr: &TypeExpr) -> Vec<String> {
+    if let TypeExpr::Generic { base, .. } = expr {
+        if is_std_name(base) {
+            return vec!["std".to_string()];
+        }
+    }
+    Vec::new()
 }
