@@ -21,9 +21,11 @@ pub struct Cli {
 /// * `--include <pattern>` — append to the include list.
 /// * `--exclude <pattern>` — append to the exclude list.
 /// * `--collapse <pattern>` — append to the collapse list.
-/// * `--include=<pattern>` (and the `=` form for the other two).
+/// * `--collapse-depth <N>` — collapse every module deeper than `N`.
+/// * `--include=<pattern>` (and the `=` form for the other flags).
 ///
-/// Any of the three filter flags may be repeated.
+/// Any of the three filter flags may be repeated;
+/// `--collapse-depth` may be given at most once.
 pub fn parse() -> Result<Cli> {
     parse_from(std::env::args().skip(1))
 }
@@ -41,11 +43,20 @@ fn parse_from<I: IntoIterator<Item = String>>(args: I) -> Result<Cli> {
                     .ok_or_else(|| anyhow!("`{}` requires a pattern argument", arg))?;
                 push_pattern(&mut spec, &arg, &value)?;
             }
+            "--collapse-depth" => {
+                let value = args
+                    .next()
+                    .ok_or_else(|| anyhow!("`--collapse-depth` requires a numeric argument"))?;
+                set_collapse_depth(&mut spec, &value)?;
+            }
             other if other.starts_with("--include=") => {
                 push_pattern(&mut spec, "--include", &other["--include=".len()..])?;
             }
             other if other.starts_with("--exclude=") => {
                 push_pattern(&mut spec, "--exclude", &other["--exclude=".len()..])?;
+            }
+            other if other.starts_with("--collapse-depth=") => {
+                set_collapse_depth(&mut spec, &other["--collapse-depth=".len()..])?;
             }
             other if other.starts_with("--collapse=") => {
                 push_pattern(&mut spec, "--collapse", &other["--collapse=".len()..])?;
@@ -68,11 +79,23 @@ fn parse_from<I: IntoIterator<Item = String>>(args: I) -> Result<Cli> {
     let root = positional.ok_or_else(|| {
         anyhow!(
             "usage: archviz <path> \
-             [--include <pat>] [--exclude <pat>] [--collapse <pat>]"
+             [--include <pat>] [--exclude <pat>] \
+             [--collapse <pat>] [--collapse-depth <N>]"
         )
     })?;
 
     Ok(Cli { root, filter: spec })
+}
+
+fn set_collapse_depth(spec: &mut FilterSpec, value: &str) -> Result<()> {
+    if spec.collapse_depth.is_some() {
+        return Err(anyhow!("`--collapse-depth` may be given at most once"));
+    }
+    let n: usize = value
+        .parse()
+        .map_err(|e| anyhow!("`--collapse-depth` expects a non-negative integer: {}", e))?;
+    spec.collapse_depth = Some(n);
+    Ok(())
 }
 
 fn push_pattern(spec: &mut FilterSpec, flag: &str, value: &str) -> Result<()> {
@@ -135,5 +158,36 @@ mod tests {
     #[test]
     fn errors_on_extra_positional() {
         assert!(parse_args(&["a", "b"]).is_err());
+    }
+}
+
+#[cfg(test)]
+mod depth_tests {
+    use super::*;
+
+    fn parse_args(args: &[&str]) -> Result<Cli> {
+        parse_from(args.iter().map(|s| s.to_string()))
+    }
+
+    #[test]
+    fn parses_collapse_depth() {
+        let cli = parse_args(&["p", "--collapse-depth", "2"]).unwrap();
+        assert_eq!(cli.filter.collapse_depth, Some(2));
+    }
+
+    #[test]
+    fn parses_collapse_depth_equals_form() {
+        let cli = parse_args(&["p", "--collapse-depth=3"]).unwrap();
+        assert_eq!(cli.filter.collapse_depth, Some(3));
+    }
+
+    #[test]
+    fn rejects_repeated_collapse_depth() {
+        assert!(parse_args(&["p", "--collapse-depth", "1", "--collapse-depth", "2"]).is_err());
+    }
+
+    #[test]
+    fn rejects_non_numeric_collapse_depth() {
+        assert!(parse_args(&["p", "--collapse-depth", "abc"]).is_err());
     }
 }

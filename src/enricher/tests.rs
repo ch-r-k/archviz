@@ -300,3 +300,79 @@ fn module_filter_empty_collapse_root_synthesizes_placeholder() {
         .expect("placeholder package emitted for literal collapse pattern");
     assert_eq!(placeholder.id.as_str(), "missing::mod");
 }
+
+#[test]
+fn module_filter_literal_collapse_matches_descendants() {
+    // Regression: `--collapse a` should collapse `a::b::Foo` too, not
+    // just an exact `a` module.
+    let mut g = Graph::default();
+    g.add_node(node("Foo", NodeKind::Struct, mods(&["a", "b"])));
+    g.add_node(node("Bar", NodeKind::Struct, mods(&["a", "b", "c"])));
+
+    let filter = ModuleFilter::new(FilterSpec {
+        collapse: vec![pat("a")],
+        ..FilterSpec::default()
+    });
+    filter.enrich(&mut g);
+
+    // Single collapsed package `a`; no source-level classes remain.
+    assert_eq!(g.nodes.len(), 1);
+    assert!(matches!(g.nodes[0].kind, NodeKind::Package));
+    assert_eq!(g.nodes[0].id.as_str(), "a");
+}
+
+#[test]
+fn module_filter_collapse_depth_collapses_deeper_modules() {
+    let mut g = Graph::default();
+    g.add_node(node("Foo", NodeKind::Struct, mods(&["a"])));
+    g.add_node(node("Bar", NodeKind::Struct, mods(&["a", "b"])));
+    g.add_node(node("Baz", NodeKind::Struct, mods(&["a", "b", "c"])));
+    g.add_node(node("Qux", NodeKind::Struct, mods(&["d", "e"])));
+
+    let filter = ModuleFilter::new(FilterSpec {
+        collapse_depth: Some(1),
+        ..FilterSpec::default()
+    });
+    filter.enrich(&mut g);
+
+    // Foo (depth 1) survives. Bar, Baz collapse into `a`. Qux collapses
+    // into `d`. Two synthesized packages.
+    let mut ids: Vec<_> = g.nodes.iter().map(|n| n.id.as_str().to_string()).collect();
+    ids.sort();
+    assert_eq!(ids, vec!["a", "a::Foo", "d"]);
+}
+
+#[test]
+fn module_filter_collapse_depth_zero_collapses_all_deeper() {
+    let mut g = Graph::default();
+    g.add_node(node("Foo", NodeKind::Struct, mods(&["a", "b"])));
+    g.add_node(node("Bar", NodeKind::Struct, mods(&["c"])));
+
+    let filter = ModuleFilter::new(FilterSpec {
+        collapse_depth: Some(0),
+        ..FilterSpec::default()
+    });
+    filter.enrich(&mut g);
+
+    // Every non-root module collapses to <root>.
+    assert_eq!(g.nodes.len(), 1);
+    assert_eq!(g.nodes[0].id.as_str(), "<root>");
+}
+
+#[test]
+fn module_filter_depth_and_pattern_take_shorter_root() {
+    let mut g = Graph::default();
+    g.add_node(node("Foo", NodeKind::Struct, mods(&["a", "b", "c"])));
+
+    // Pattern would collapse at `a::b` (len=2). Depth caps at 1.
+    // Shorter root (depth=1 → `a`) wins.
+    let filter = ModuleFilter::new(FilterSpec {
+        collapse: vec![pat("a::b")],
+        collapse_depth: Some(1),
+        ..FilterSpec::default()
+    });
+    filter.enrich(&mut g);
+
+    assert_eq!(g.nodes.len(), 1);
+    assert_eq!(g.nodes[0].id.as_str(), "a");
+}

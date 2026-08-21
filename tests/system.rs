@@ -215,3 +215,64 @@ fn artifact_directory_exists() {
     std::fs::create_dir_all(&dir).expect("create artifact dir");
     assert!(Path::new(&dir).exists());
 }
+
+// ---------------------------------------------------------------------
+// Nested-collapse regression and --collapse-depth
+// ---------------------------------------------------------------------
+
+#[test]
+fn literal_collapse_covers_descendants_on_self() {
+    // Before the subtree-semantics fix, `--collapse enricher` matched
+    // only the (nonexistent) exact module `enricher` and left every
+    // `enricher::*` submodule untouched. Regression guard.
+    let out = run_archviz(&["src", "--collapse", "enricher"]);
+    write_artifact("archviz_self_collapse_enricher_literal", &out);
+
+    assert_plantuml_envelope(&out);
+    assert!(
+        !out.contains("enricher__module_filter__ModuleFilter"),
+        "enricher::module_filter class leaked past literal collapse:\n{out}"
+    );
+    assert!(
+        !out.contains("enricher__origin_resolver__OriginResolver"),
+        "enricher::origin_resolver class leaked past literal collapse:\n{out}"
+    );
+    // Should have exactly one `enricher` package block (the collapsed
+    // synthetic one), not two (placeholder + surviving submodules).
+    let matches = out.matches("package enricher").count()
+        + out.matches("package \"enricher\"").count();
+    assert_eq!(matches, 1, "expected one enricher package block, got {matches}:\n{out}");
+}
+
+#[test]
+fn collapse_depth_one_flattens_top_level_on_self() {
+    let out = run_archviz(&["src", "--collapse-depth", "1"]);
+    write_artifact("archviz_self_collapse_depth_1", &out);
+
+    assert_plantuml_envelope(&out);
+    // Every archviz submodule class is gone; only top-level packages
+    // remain (plus any depth-1 classes and std/external stubs).
+    for gone in [
+        "enricher__module_filter__ModuleFilter",
+        "renderer__plantuml__PlantUmlRenderer",
+        "parser__ast_parser__AstParser",
+        "filter__spec__FilterSpec",
+    ] {
+        assert!(
+            !out.contains(gone),
+            "expected `{gone}` collapsed at depth 1, still present:\n{out}"
+        );
+    }
+}
+
+#[test]
+fn collapse_depth_two_keeps_second_level_on_self() {
+    let out = run_archviz(&["src", "--collapse-depth", "2"]);
+    write_artifact("archviz_self_collapse_depth_2", &out);
+
+    assert_plantuml_envelope(&out);
+    // At depth 2 the enricher submodule classes are still there (they
+    // live at module_path.len() == 2).
+    assert!(out.contains("enricher__module_filter__ModuleFilter"));
+    assert!(out.contains("renderer__plantuml__PlantUmlRenderer"));
+}

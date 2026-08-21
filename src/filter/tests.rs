@@ -70,6 +70,7 @@ fn spec_exclude_wins_over_include() {
         include: vec![pat("a::**")],
         exclude: vec![pat("a::internal::**")],
         collapse: vec![],
+        collapse_depth: None,
     };
     assert_eq!(spec.decides(&path(&["a", "public"])), Decision::Keep);
     assert_eq!(spec.decides(&path(&["a", "internal"])), Decision::Drop);
@@ -85,13 +86,16 @@ fn spec_empty_include_keeps_everything_by_default() {
 }
 
 #[test]
-fn spec_collapse_only_when_kept() {
+fn spec_decides_ignores_collapse() {
+    // Collapse is handled by ModuleFilter, not FilterSpec::decides —
+    // decides only returns Keep or Drop for exclude/include.
     let spec = FilterSpec {
         include: vec![],
         exclude: vec![pat("a::internal::**")],
         collapse: vec![pat("a::db")],
+        collapse_depth: None,
     };
-    assert_eq!(spec.decides(&path(&["a", "db"])), Decision::Collapse);
+    assert_eq!(spec.decides(&path(&["a", "db"])), Decision::Keep);
     assert_eq!(spec.decides(&path(&["a", "internal"])), Decision::Drop);
     assert_eq!(spec.decides(&path(&["a", "public"])), Decision::Keep);
 }

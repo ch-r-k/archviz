@@ -71,7 +71,13 @@ that item for what's missing).
 - [x] FR22: The tool shall support a repeatable `--collapse <pattern>`
   flag that hides the classes/traits/enums under matching modules and
   replaces the subtree with a single empty `package` node, with
-  previously-inbound edges redirected to that package.
+  previously-inbound edges redirected to that package. Collapse uses
+  subtree semantics — `--collapse foo` collapses `foo` and every
+  descendant.
+- [x] FR23: The tool shall support a `--collapse-depth <N>` flag that
+  collapses every module deeper than `N` levels into its ancestor at
+  depth `N`. When combined with `--collapse` patterns, the shorter
+  (outermost) collapse root wins.
 
 ### Rendering / output
 
