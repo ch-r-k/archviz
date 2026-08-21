@@ -59,6 +59,19 @@ that item for what's missing).
 - [x] FR13: The enrichment step shall support being extended with
   additional, independent enrichment passes without modifying existing
   ones.
+  > Reinforced by the opt-in `ModuleFilter` enricher (see FR20–FR22
+  > below), which was added purely by implementing `GraphEnricher` and
+  > appending to the chain via `PipelineBuilder::with_module_filter`.
+- [x] FR20: The tool shall support a repeatable `--exclude <pattern>`
+  flag that drops all nodes whose module path matches the pattern
+  along with any edges incident to them.
+- [x] FR21: The tool shall support a repeatable `--include <pattern>`
+  flag that, when set, keeps only nodes whose module path matches at
+  least one include pattern (exclude always wins).
+- [x] FR22: The tool shall support a repeatable `--collapse <pattern>`
+  flag that hides the classes/traits/enums under matching modules and
+  replaces the subtree with a single empty `package` node, with
+  previously-inbound edges redirected to that package.
 
 ### Rendering / output
 
@@ -102,8 +115,14 @@ that item for what's missing).
   enrichment, and rendering stages, runnable via `cargo test`.
   > Implemented: unit tests exist for the renderer
   > (`src/renderer/tests.rs`), the parser's `TypeExtractor`
-  > (`src/parser/tests.rs`), and the enricher's `OriginResolver`
-  > (`src/enricher/tests.rs`).
+  > (`src/parser/tests.rs`), the enricher's `OriginResolver` and
+  > `ModuleFilter` (`src/enricher/tests.rs`), the module-path
+  > `FilterSpec` (`src/filter/tests.rs`), and CLI parsing
+  > (`src/cli.rs`). Black-box **system tests** in `tests/system.rs`
+  > invoke the compiled binary against the bundled `example/src` and
+  > against archviz's own `src/` tree, asserting on the emitted
+  > PlantUML and writing every rendered diagram to
+  > `target/systemtest-output/` for developer inspection.
 - [x] NFR6: Each struct/trait shall expose a small, human-trackable number
   of members (fields/methods) — roughly 5–9 (Miller's "seven, plus or
   minus two") — with logic beyond that split into smaller, well-named

@@ -70,6 +70,12 @@ pub enum NodeKind {
     Synthetic {
         params: Option<String>,
     },
+    /// A synthetic "collapsed" module: the renderer emits an empty
+    /// `package` block instead of a class. Produced by
+    /// [`crate::enricher::module_filter::ModuleFilter`] when a module
+    /// matches a `--collapse` pattern; all descendant nodes are dropped
+    /// and their edges redirected to this node's [`NodeId`].
+    Package,
 }
 
 #[derive(Debug, Clone)]

@@ -2,7 +2,9 @@ use anyhow::{anyhow, Result};
 
 use crate::enricher::GraphEnricher;
 use crate::enricher::edge_target_resolver::EdgeTargetResolver;
+use crate::enricher::module_filter::ModuleFilter;
 use crate::enricher::origin_resolver::OriginResolver;
+use crate::filter::FilterSpec;
 use crate::model::Graph;
 use crate::parser::visitor::GraphVisitor;
 use crate::parser::{AstParser, Parser};
@@ -45,6 +47,13 @@ impl Pipeline {
 
         for enricher in &self.enrichers {
             enricher.enrich(&mut graph);
+        }
+
+        if graph.nodes.is_empty() {
+            eprintln!(
+                "archviz: no nodes remain after filtering; \
+                 emitting an empty diagram"
+            );
         }
 
         Ok(self.renderer.render(&graph))
@@ -93,6 +102,16 @@ impl PipelineBuilder {
     #[allow(dead_code)]
     pub fn with_enricher(mut self, enricher: impl GraphEnricher + 'static) -> Self {
         self.enrichers.push(Box::new(enricher));
+        self
+    }
+
+    /// Appends a [`ModuleFilter`] to the enricher chain. A no-op if
+    /// `spec` is empty — matching today's behavior when no filter flags
+    /// are given.
+    pub fn with_module_filter(mut self, spec: FilterSpec) -> Self {
+        if !spec.is_empty() {
+            self.enrichers.push(Box::new(ModuleFilter::new(spec)));
+        }
         self
     }
 

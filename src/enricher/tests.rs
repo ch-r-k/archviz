@@ -2,7 +2,10 @@
 
 use crate::enricher::GraphEnricher;
 use crate::enricher::edge_target_resolver::EdgeTargetResolver;
+use crate::enricher::module_filter::ModuleFilter;
 use crate::enricher::origin_resolver::OriginResolver;
+use crate::filter::pattern::ModulePattern;
+use crate::filter::spec::FilterSpec;
 use crate::model::node::NodeId;
 use crate::model::{Edge, Graph, Node, NodeKind, Relation};
 
@@ -146,4 +149,154 @@ fn edge_target_resolver_leaves_unresolved_bare() {
 
     EdgeTargetResolver.enrich(&mut g);
     assert_eq!(g.edges[0].to.as_str(), "String");
+}
+
+fn pat(s: &str) -> ModulePattern {
+    ModulePattern::parse(s).expect("valid pattern")
+}
+
+fn mods(parts: &[&str]) -> Vec<String> {
+    parts.iter().map(|s| s.to_string()).collect()
+}
+
+#[test]
+fn module_filter_drops_excluded_nodes_and_dangling_edges() {
+    let mut g = Graph::default();
+    g.add_node(node("Public", NodeKind::Struct, mods(&["a", "b", "public"])));
+    g.add_node(node(
+        "Internal",
+        NodeKind::Struct,
+        mods(&["a", "b", "internal"]),
+    ));
+    g.edges.push(Edge {
+        from: NodeId::from_parts(&mods(&["a", "b", "public"]), "Public"),
+        to: NodeId::from_parts(&mods(&["a", "b", "internal"]), "Internal"),
+        relation: Relation::Composition,
+    });
+
+    let filter = ModuleFilter::new(FilterSpec {
+        exclude: vec![pat("**::internal")],
+        ..FilterSpec::default()
+    });
+    filter.enrich(&mut g);
+
+    assert_eq!(g.nodes.len(), 1);
+    assert_eq!(g.nodes[0].display_name, "Public");
+    assert!(g.edges.is_empty(), "edges: {:?}", g.edges);
+}
+
+#[test]
+fn module_filter_include_only_keeps_matches() {
+    let mut g = Graph::default();
+    g.add_node(node("Foo", NodeKind::Struct, mods(&["api"])));
+    g.add_node(node("Bar", NodeKind::Struct, mods(&["internal"])));
+
+    let filter = ModuleFilter::new(FilterSpec {
+        include: vec![pat("api::**")],
+        ..FilterSpec::default()
+    });
+    filter.enrich(&mut g);
+
+    let names: Vec<_> = g.nodes.iter().map(|n| n.display_name.clone()).collect();
+    assert_eq!(names, vec!["Foo"]);
+}
+
+#[test]
+fn module_filter_empty_spec_is_noop() {
+    let mut g = Graph::default();
+    g.add_node(node("A", NodeKind::Struct, mods(&["m"])));
+    g.edges.push(Edge {
+        from: NodeId::from_parts(&mods(&["m"]), "A"),
+        to: NodeId::bare("String"),
+        relation: Relation::Composition,
+    });
+
+    let before_nodes = g.nodes.len();
+    let before_edges = g.edges.len();
+    ModuleFilter::new(FilterSpec::default()).enrich(&mut g);
+    assert_eq!(g.nodes.len(), before_nodes);
+    assert_eq!(g.edges.len(), before_edges);
+}
+
+#[test]
+fn module_filter_collapse_replaces_subtree_with_package() {
+    let mut g = Graph::default();
+    g.add_node(node("Foo", NodeKind::Struct, mods(&["a", "b"])));
+    g.add_node(node("Bar", NodeKind::Struct, mods(&["a", "b"])));
+    g.add_node(node("Baz", NodeKind::Struct, mods(&["c"])));
+
+    let foo = NodeId::from_parts(&mods(&["a", "b"]), "Foo");
+    let bar = NodeId::from_parts(&mods(&["a", "b"]), "Bar");
+    let baz = NodeId::from_parts(&mods(&["c"]), "Baz");
+
+    g.edges.push(Edge {
+        from: foo.clone(),
+        to: bar.clone(),
+        relation: Relation::Composition,
+    });
+    g.edges.push(Edge {
+        from: bar.clone(),
+        to: baz.clone(),
+        relation: Relation::Composition,
+    });
+
+    let filter = ModuleFilter::new(FilterSpec {
+        collapse: vec![pat("a::b")],
+        ..FilterSpec::default()
+    });
+    filter.enrich(&mut g);
+
+    // Nodes: only the package `a::b` and the survivor `c::Baz`.
+    let mut names: Vec<_> = g.nodes.iter().map(|n| n.display_name.clone()).collect();
+    names.sort();
+    assert_eq!(names, vec!["Baz", "b"]);
+
+    let package = g
+        .nodes
+        .iter()
+        .find(|n| matches!(n.kind, NodeKind::Package))
+        .expect("package emitted");
+    assert_eq!(package.id.as_str(), "a::b");
+    assert_eq!(package.module_path, mods(&["a"]));
+
+    // Exactly one edge: package `a::b` → `c::Baz`. The Foo→Bar edge
+    // collapsed to a self-edge and vanished.
+    assert_eq!(g.edges.len(), 1, "edges: {:?}", g.edges);
+    assert_eq!(g.edges[0].from.as_str(), "a::b");
+    assert_eq!(g.edges[0].to.as_str(), "c::Baz");
+}
+
+#[test]
+fn module_filter_nested_collapse_outer_wins() {
+    let mut g = Graph::default();
+    g.add_node(node("Deep", NodeKind::Struct, mods(&["a", "b", "c"])));
+
+    let filter = ModuleFilter::new(FilterSpec {
+        collapse: vec![pat("a::b::**"), pat("a::b::c::**")],
+        ..FilterSpec::default()
+    });
+    filter.enrich(&mut g);
+
+    // Only the outer package `a::b`.
+    assert_eq!(g.nodes.len(), 1);
+    assert_eq!(g.nodes[0].id.as_str(), "a::b");
+}
+
+#[test]
+fn module_filter_empty_collapse_root_synthesizes_placeholder() {
+    let mut g = Graph::default();
+    g.add_node(node("Other", NodeKind::Struct, mods(&["other"])));
+
+    let filter = ModuleFilter::new(FilterSpec {
+        collapse: vec![pat("missing::mod")],
+        ..FilterSpec::default()
+    });
+    filter.enrich(&mut g);
+
+    let placeholder = g
+        .nodes
+        .iter()
+        .find(|n| matches!(n.kind, NodeKind::Package))
+        .expect("placeholder package emitted for literal collapse pattern");
+    assert_eq!(placeholder.id.as_str(), "missing::mod");
 }

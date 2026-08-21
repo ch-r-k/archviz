@@ -1,4 +1,5 @@
 pub mod edge_target_resolver;
+pub mod module_filter;
 pub mod origin_resolver;
 pub mod traits;
 mod tests;

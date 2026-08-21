@@ -59,6 +59,13 @@ impl DrawNode for PlantUmlRenderer {
             NodeKind::Synthetic { params: None } => {
                 format!("class {}{}\n", display, alias)
             }
+            NodeKind::Package => {
+                // A collapsed module: render as an empty package block.
+                // `display` is already quoted; `alias` is either
+                // ` as <sanitized-id>` or empty when the id matches the
+                // display.
+                format!("package {}{} {{\n}}\n\n", display, alias)
+            }
         }
     }
 }

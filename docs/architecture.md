@@ -24,7 +24,7 @@ flowchart TD
     P -->|"3 . GraphVisitor::new(&mut graph, ...).visit_module(...)"| GV["GraphVisitor\n(src/parser/visitor.rs)"]
     GV -->|"populates"| G["Graph\n(src/model, nodes + edges)"]
 
-    P -->|"4 . for each enricher: enricher.enrich(&mut graph)"| EN["GraphEnricher (OriginResolver)\n(src/enricher)"]
+    P -->|"4 . for each enricher: enricher.enrich(&mut graph)"| EN["GraphEnricher chain\n(EdgeTargetResolver → OriginResolver\n→ ModuleFilter, opt-in)\n(src/enricher)"]
     EN -->|"mutates"| G
 
     P -->|"5 . renderer.render(&graph)"| R["Renderer (PlantUmlRenderer)\n(src/renderer)"]
@@ -112,6 +112,15 @@ for precise resolution.
 run in order, so additional enrichment passes (e.g. computing metrics,
 filtering, or adding annotations) can be added without touching existing
 ones.
+
+`ModuleFilter` (`src/enricher/module_filter.rs`) is an **opt-in**
+enricher appended to the chain when the user passes `--include`,
+`--exclude`, or `--collapse` on the command line. It runs *after* the
+resolvers so every edge target is a resolved [`NodeId`]; it drops nodes
+that match `--exclude` (or that don't match `--include`), and collapses
+`--collapse` matches into a single synthetic `NodeKind::Package` node
+whose incoming edges are redirected to the package. See
+`docs/filtering.md` for pattern syntax and worked examples.
 
 ### 4. `Renderer` (`src/renderer/`)
 

@@ -49,7 +49,10 @@ pub struct Pipeline {
 Adding a new strategy (e.g. a Mermaid or Graphviz renderer) means writing
 `impl Renderer for MyRenderer` — `Pipeline` and the other stages never
 change. `enrichers: Vec<Box<dyn GraphEnricher>>` extends this to a *chain*
-of strategies applied in sequence over the same data.
+of strategies applied in sequence over the same data — today
+`EdgeTargetResolver`, `OriginResolver`, and (opt-in) `ModuleFilter`
+implement the same trait and are wired into the same chain without any
+of them knowing about the others.
 
 ```mermaid
 classDiagram

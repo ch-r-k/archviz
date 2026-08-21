@@ -1,5 +1,7 @@
+mod cli;
 mod enricher;
 mod error;
+mod filter;
 mod model;
 mod parser;
 mod pipeline;
@@ -10,9 +12,12 @@ use anyhow::Result;
 use pipeline::Pipeline;
 
 fn main() -> Result<()> {
-    let root = std::env::args().nth(1).expect("usage: archviz <path>");
+    let cli = cli::parse()?;
 
-    let output = Pipeline::builder(root).build().run()?;
+    let output = Pipeline::builder(cli.root)
+        .with_module_filter(cli.filter)
+        .build()
+        .run()?;
     println!("{}", output);
 
     Ok(())

@@ -7,4 +7,7 @@ pub enum ArchError {
 
     #[error("syn parse error: {0}")]
     Syn(#[from] syn::Error),
+
+    #[error("invalid module filter pattern: {0}")]
+    InvalidPattern(String),
 }

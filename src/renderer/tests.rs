@@ -204,3 +204,37 @@ fn draw_node_with_special_chars_in_name() {
         "class \"Vec<String>\"\n".to_string()
     );
 }
+
+#[test]
+fn draw_package_node_emits_empty_package_block() {
+    let renderer = PlantUmlRenderer;
+    let node = Node {
+        id: NodeId::bare("a::b"),
+        display_name: "b".into(),
+        kind: NodeKind::Package,
+        module_path: vec!["a".into()],
+    };
+    assert_eq!(
+        renderer.draw_node(&node),
+        "package \"b\" as a__b {\n}\n\n".to_string()
+    );
+}
+
+#[test]
+fn package_node_nests_inside_parent_module() {
+    let renderer = PlantUmlRenderer;
+    let mut graph = Graph::default();
+    graph.add_node(Node {
+        id: NodeId::bare("a::b"),
+        display_name: "b".into(),
+        kind: NodeKind::Package,
+        module_path: vec!["a".into()],
+    });
+
+    let out = renderer.render(&graph);
+    assert!(
+        out.contains("package \"a\" {\npackage \"b\" as a__b {\n}\n\n}\n\n"),
+        "unexpected render output:\n{}",
+        out
+    );
+}
