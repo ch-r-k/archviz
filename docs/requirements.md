@@ -63,11 +63,13 @@ that item for what's missing).
   > below), which was added purely by implementing `GraphEnricher` and
   > appending to the chain via `PipelineBuilder::with_module_filter`.
 - [x] FR20: The tool shall support a repeatable `--exclude <pattern>`
-  flag that drops all nodes whose module path matches the pattern
-  along with any edges incident to them.
+  flag that drops all nodes whose module path is matched by (or lives
+  under) the pattern along with any edges incident to them.
 - [x] FR21: The tool shall support a repeatable `--include <pattern>`
-  flag that, when set, keeps only nodes whose module path matches at
-  least one include pattern (exclude always wins).
+  flag that, when set, keeps only nodes whose module path is matched
+  by (or lives under) at least one include pattern (exclude always
+  wins). Std/external stub nodes are include-exempt: they survive
+  when a kept edge still references them and are pruned otherwise.
 - [x] FR22: The tool shall support a repeatable `--collapse <pattern>`
   flag that hides the classes/traits/enums under matching modules and
   replaces the subtree with a single empty `package` node, with

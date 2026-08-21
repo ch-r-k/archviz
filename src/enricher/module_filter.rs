@@ -44,13 +44,31 @@ impl ModuleFilter {
     /// `collapse_depth = Some(n)` additionally forces any module at
     /// depth > n to collapse into its ancestor at depth n. The
     /// shallower of the two roots wins when both apply.
-    fn decide(&self, module_path: &[String]) -> (Decision, Option<Vec<String>>) {
-        match self.spec.decides(module_path) {
+    ///
+    /// `synthetic = true` skips the include-drop step: synthetic nodes
+    /// (compound types, std/external stubs) survive include filters and
+    /// are pruned later if no surviving edge references them.
+    fn decide(&self, module_path: &[String], include_exempt: bool) -> (Decision, Option<Vec<String>>) {
+        let decision = if include_exempt {
+            // Exclude still applies (users may explicitly drop std),
+            // but include does not — include-exempt nodes are always
+            // kept unless explicitly excluded.
+            if self.spec.exclude.iter().any(|p| any_prefix_match(p, module_path)) {
+                Decision::Drop
+            } else {
+                Decision::Keep
+            }
+        } else {
+            self.spec.decides(module_path)
+        };
+        match decision {
             Decision::Drop => return (Decision::Drop, None),
             Decision::Keep | Decision::Collapse => {}
         }
-        if let Some(root) = self.collapse_root_for(module_path) {
-            return (Decision::Collapse, Some(root));
+        if !include_exempt {
+            if let Some(root) = self.collapse_root_for(module_path) {
+                return (Decision::Collapse, Some(root));
+            }
         }
         (Decision::Keep, None)
     }
@@ -92,11 +110,19 @@ impl GraphEnricher for ModuleFilter {
             return;
         }
 
-        // Per-node decisions and collapse roots.
+        // Per-node decisions and collapse roots. Synthetic std/external
+        // stubs are exempt from include-drop — they exist purely as
+        // edge targets, and users don't type `--include std`. Compound
+        // types (`Vec<Segment>`) that live under a real module path
+        // follow that module's include/exclude rules like any other
+        // node; only nodes at empty module_path or under `std`/`external`
+        // are treated as universal.
         let mut dropped: HashSet<NodeId> = HashSet::new();
         let mut collapse_roots: HashMap<NodeId, Vec<String>> = HashMap::new();
         for node in &graph.nodes {
-            match self.decide(&node.module_path) {
+            let include_exempt = is_stub_module_path(&node.module_path)
+                && matches!(node.kind, NodeKind::Synthetic { .. });
+            match self.decide(&node.module_path, include_exempt) {
                 (Decision::Drop, _) => {
                     dropped.insert(node.id.clone());
                 }
@@ -176,6 +202,26 @@ impl GraphEnricher for ModuleFilter {
             });
         }
         graph.edges = new_edges;
+
+        // Prune Synthetic nodes (compound types / std / external stubs)
+        // that no surviving edge references — they were kept as
+        // include-exempt "just in case" and became floaters.
+        prune_orphan_synthetics(graph);
+    }
+}
+
+fn prune_orphan_synthetics(graph: &mut Graph) {
+    let mut referenced: HashSet<NodeId> = HashSet::new();
+    for edge in &graph.edges {
+        referenced.insert(edge.from.clone());
+        referenced.insert(edge.to.clone());
+    }
+    let before = graph.nodes.len();
+    graph.nodes.retain(|n| {
+        !matches!(n.kind, NodeKind::Synthetic { .. }) || referenced.contains(&n.id)
+    });
+    if graph.nodes.len() != before {
+        rebuild_node_index(graph);
     }
 }
 
@@ -186,6 +232,29 @@ fn any_matches(patterns: &[ModulePattern], module_path: &[String]) -> bool {
         }
     }
     false
+}
+
+/// True when `pat` matches `module_path` or any of its prefixes.
+fn any_prefix_match(pat: &ModulePattern, module_path: &[String]) -> bool {
+    for len in 0..=module_path.len() {
+        if pat.matches(&module_path[..len]) {
+            return true;
+        }
+    }
+    false
+}
+
+/// True for module paths where a synthetic node is a *stub* rather than
+/// a compound type belonging to a specific source module: the empty
+/// path (bare generic bases from parsing) and the `std` / `external`
+/// packages emitted by [`crate::enricher::origin_resolver::OriginResolver`].
+/// These are the module paths a user should never have to name in a
+/// `--include` filter.
+fn is_stub_module_path(module_path: &[String]) -> bool {
+    match module_path.first() {
+        None => true,
+        Some(seg) => seg == "std" || seg == "external",
+    }
 }
 
 /// The `NodeId` used for a collapsed module's synthetic package: the

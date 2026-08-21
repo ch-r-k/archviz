@@ -40,23 +40,33 @@ impl FilterSpec {
     /// Include/exclude decision only. Collapse is handled by
     /// [`crate::enricher::module_filter::ModuleFilter`] because it
     /// needs to identify the collapse *root* per node (not just
-    /// yes/no), and applies subtree semantics that `ModulePattern`
-    /// alone doesn't express.
+    /// yes/no).
+    ///
+    /// **Subtree semantics.** A pattern `foo::bar` matches `foo::bar`
+    /// itself *and* any descendant module. Consistent with `--collapse`.
+    /// Wildcard patterns (`*`, `**`) work as documented in
+    /// [`crate::filter::pattern`].
     pub fn decides(&self, module_path: &[String]) -> Decision {
-        if any_match(&self.exclude, module_path) {
+        if any_subtree_match(&self.exclude, module_path) {
             return Decision::Drop;
         }
-        if !self.include.is_empty() && !any_match(&self.include, module_path) {
+        if !self.include.is_empty() && !any_subtree_match(&self.include, module_path) {
             return Decision::Drop;
         }
         Decision::Keep
     }
 }
 
-fn any_match(patterns: &[ModulePattern], module_path: &[String]) -> bool {
-    for p in patterns {
-        if p.matches(module_path) {
-            return true;
+/// True when any pattern matches `module_path` or any of its prefixes.
+/// That gives include/exclude/collapse consistent "self + descendants"
+/// semantics — the way users think about "the `foo` module".
+fn any_subtree_match(patterns: &[ModulePattern], module_path: &[String]) -> bool {
+    for len in 0..=module_path.len() {
+        let prefix = &module_path[..len];
+        for p in patterns {
+            if p.matches(prefix) {
+                return true;
+            }
         }
     }
     false

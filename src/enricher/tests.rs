@@ -376,3 +376,106 @@ fn module_filter_depth_and_pattern_take_shorter_root() {
     assert_eq!(g.nodes.len(), 1);
     assert_eq!(g.nodes[0].id.as_str(), "a");
 }
+
+#[test]
+fn module_filter_literal_include_matches_descendants() {
+    // Regression: `--include foo` should keep everything under `foo`.
+    let mut g = Graph::default();
+    g.add_node(node("Foo", NodeKind::Struct, mods(&["a", "b"])));
+    g.add_node(node("Bar", NodeKind::Struct, mods(&["a", "b", "c"])));
+    g.add_node(node("Zoo", NodeKind::Struct, mods(&["x"])));
+
+    let filter = ModuleFilter::new(FilterSpec {
+        include: vec![pat("a")],
+        ..FilterSpec::default()
+    });
+    filter.enrich(&mut g);
+
+    let mut names: Vec<_> = g.nodes.iter().map(|n| n.display_name.clone()).collect();
+    names.sort();
+    assert_eq!(names, vec!["Bar", "Foo"]);
+}
+
+#[test]
+fn module_filter_include_keeps_std_stub_edge_targets() {
+    // A surviving edge into a std stub should keep the stub visible so
+    // the edge renders correctly.
+    let mut g = Graph::default();
+    g.add_node(node("Foo", NodeKind::Struct, mods(&["keep"])));
+    g.add_node(Node {
+        id: NodeId::bare("String"),
+        display_name: "String".into(),
+        kind: NodeKind::Synthetic { params: None },
+        module_path: mods(&["std"]),
+    });
+    g.edges.push(Edge {
+        from: NodeId::from_parts(&mods(&["keep"]), "Foo"),
+        to: NodeId::bare("String"),
+        relation: Relation::Composition,
+    });
+
+    let filter = ModuleFilter::new(FilterSpec {
+        include: vec![pat("keep")],
+        ..FilterSpec::default()
+    });
+    filter.enrich(&mut g);
+
+    assert!(
+        g.nodes.iter().any(|n| n.display_name == "String"),
+        "std stub was dropped"
+    );
+    assert_eq!(g.edges.len(), 1, "surviving edge to std stub was dropped");
+}
+
+#[test]
+fn module_filter_include_prunes_unreferenced_std_stub() {
+    // A std stub with no incoming edge (because its edge got dropped)
+    // should be pruned so it doesn't float as a bare node.
+    let mut g = Graph::default();
+    g.add_node(node("Foo", NodeKind::Struct, mods(&["drop"])));
+    g.add_node(Node {
+        id: NodeId::bare("String"),
+        display_name: "String".into(),
+        kind: NodeKind::Synthetic { params: None },
+        module_path: mods(&["std"]),
+    });
+    g.edges.push(Edge {
+        from: NodeId::from_parts(&mods(&["drop"]), "Foo"),
+        to: NodeId::bare("String"),
+        relation: Relation::Composition,
+    });
+
+    let filter = ModuleFilter::new(FilterSpec {
+        include: vec![pat("keep")],
+        ..FilterSpec::default()
+    });
+    filter.enrich(&mut g);
+
+    assert!(
+        g.nodes.iter().all(|n| n.display_name != "String"),
+        "orphan std stub not pruned"
+    );
+}
+
+#[test]
+fn module_filter_include_drops_compound_types_under_excluded_owner() {
+    // Compound types (`Vec<Foo>`) get the owner's module_path, so they
+    // must follow the owner's include decision — otherwise they'd
+    // survive as noise from unrelated modules.
+    let mut g = Graph::default();
+    g.add_node(node("Owner", NodeKind::Struct, mods(&["drop"])));
+    g.add_node(Node {
+        id: NodeId::bare("Vec<Owner>"),
+        display_name: "Vec<Owner>".into(),
+        kind: NodeKind::Synthetic { params: Some("Owner".into()) },
+        module_path: mods(&["drop"]),
+    });
+
+    let filter = ModuleFilter::new(FilterSpec {
+        include: vec![pat("keep")],
+        ..FilterSpec::default()
+    });
+    filter.enrich(&mut g);
+
+    assert!(g.nodes.is_empty(), "compound type from excluded module leaked: {:?}", g.nodes.iter().map(|n| &n.id).collect::<Vec<_>>());
+}

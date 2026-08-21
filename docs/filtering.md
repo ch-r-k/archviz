@@ -5,8 +5,8 @@ all opt-in and all repeatable:
 
 | Flag | Effect |
 | --- | --- |
-| `--include <pattern>` | Keep only nodes whose module path matches at least one include pattern. Omitting the flag means "include everything". |
-| `--exclude <pattern>` | Drop nodes whose module path matches. Edges incident to a dropped node are dropped too. |
+| `--include <pattern>` | Keep only nodes whose module path is matched by (or lives under) at least one include pattern. Omitting the flag means "include everything". |
+| `--exclude <pattern>` | Drop nodes whose module path is matched by (or lives under) an exclude pattern. Edges incident to a dropped node are dropped too. |
 | `--collapse <pattern>` | Replace matching modules (and every descendant module) with a single empty `package "…" { }` block; redirect edges that used to terminate inside them to the package. |
 | `--collapse-depth <N>` | Collapse every module deeper than `N` levels into its ancestor at depth `N`. `N = 0` flattens the entire project into a single root package. Combine with `--collapse` freely — the shorter (outermost) collapse root wins. |
 
@@ -14,12 +14,20 @@ Precedence, applied per node: `exclude` wins over `include`, and
 collapse (whether from `--collapse` or `--collapse-depth`) applies only
 to nodes that survived both.
 
-**Subtree semantics for collapse.** Unlike include/exclude, a
-`--collapse <pattern>` pattern matches the module itself **and** every
-descendant module. Both `--collapse enricher` and
-`--collapse 'enricher::**'` collapse the same subtree; the shorter form
-is preferred. This is by design — collapse is almost always used to
-hide a subsystem.
+**Subtree semantics.** All three module-path filters treat a pattern as
+matching the module itself **and** every descendant. `--include foo`
+keeps `foo::bar::Baz`; `--exclude tests` drops `tests::helpers` too;
+`--collapse enricher` and `--collapse 'enricher::**'` are equivalent.
+Wildcards (`*`, `**`) still work as documented if you want finer
+control.
+
+**Std / external stubs are include-exempt.** Synthetic nodes under the
+`std` and `external` packages (e.g. `String`, `Vec<T>`) are not
+required to match `--include`; they're kept if any surviving edge
+references them, pruned otherwise. So `--include renderer` still
+renders `renderer::plantuml::PlantUmlRenderer --> String : contains`
+without you having to write `--include std` as well. `--exclude std`
+still works if you specifically want to hide them.
 
 ## Pattern syntax
 

@@ -276,3 +276,36 @@ fn collapse_depth_two_keeps_second_level_on_self() {
     assert!(out.contains("enricher__module_filter__ModuleFilter"));
     assert!(out.contains("renderer__plantuml__PlantUmlRenderer"));
 }
+
+#[test]
+fn literal_include_covers_descendants_on_self() {
+    // Regression: `--include renderer` used to return an empty diagram
+    // because include was strict-exact. It should now keep the whole
+    // `renderer::*` subtree plus referenced std stubs.
+    let out = run_archviz(&["src", "--include", "renderer"]);
+    write_artifact("archviz_self_include_renderer", &out);
+
+    assert_plantuml_envelope(&out);
+    assert!(
+        out.contains("renderer__plantuml__PlantUmlRenderer"),
+        "expected renderer classes to survive `--include renderer`:\n{out}"
+    );
+    assert!(
+        out.contains("renderer__traits__Renderer"),
+        "expected renderer traits to survive `--include renderer`:\n{out}"
+    );
+    // Non-renderer classes must be gone.
+    assert!(
+        !out.contains("parser__ast_parser__AstParser"),
+        "non-included module leaked into output:\n{out}"
+    );
+    assert!(
+        !out.contains("enricher__module_filter__ModuleFilter"),
+        "non-included module leaked into output:\n{out}"
+    );
+    // Std stubs actually referenced by kept edges must survive.
+    assert!(
+        out.contains("class String"),
+        "referenced std stub was dropped:\n{out}"
+    );
+}
