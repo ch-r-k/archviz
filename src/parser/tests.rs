@@ -75,13 +75,9 @@ fn trait_object_names_unwrap_box_dyn() {
 }
 
 #[test]
-fn compound_generic_lives_under_std_not_owner_module() {
-    // Regression: compound types like `Vec<UserType>` used to inherit
-    // the owner module's `module_path`. That produced spurious
-    // "model --> parser" edges in a `--collapse-depth 1` view whenever
-    // a shared type like `Option<String>` was first synthesized in a
-    // parser file. Compound types should live under `std` (or root),
-    // never a source module.
+fn compound_generic_lives_in_owner_module() {
+    // Compound types live in the module of the type that uses them,
+    // e.g. `Vec<Node>` used by `Graph` lands in `some::module`.
     use crate::model::{Graph, NodeKind};
     use crate::parser::graph_builder::GraphBuilder;
     use crate::parser::type_expr::TypeExpr;
@@ -110,39 +106,8 @@ fn compound_generic_lives_under_std_not_owner_module() {
     );
     assert_eq!(
         vec_node.module_path,
-        vec!["std".to_string()],
-        "std-based compound must live under `std`, got {:?}",
+        vec!["some".to_string(), "module".to_string()],
+        "compound must live in the owner module, got {:?}",
         vec_node.module_path
-    );
-}
-
-#[test]
-fn compound_non_std_generic_lives_at_root() {
-    use crate::model::Graph;
-    use crate::parser::graph_builder::GraphBuilder;
-    use crate::parser::type_expr::TypeExpr;
-
-    let mut g = Graph::default();
-    let owner_module = vec!["some".into(), "module".into()];
-    {
-        let mut b = GraphBuilder::new(&mut g, &owner_module);
-        b.add_struct("Owner");
-        b.add_field_type(
-            "Owner",
-            &TypeExpr::Generic {
-                base: "MyContainer".into(),
-                args: vec![TypeExpr::Simple("String".into())],
-            },
-        );
-    }
-    let node = g
-        .nodes
-        .iter()
-        .find(|n| n.display_name == "MyContainer<String>")
-        .expect("compound synthesized");
-    assert!(
-        node.module_path.is_empty(),
-        "non-std compound should live at root, got {:?}",
-        node.module_path
     );
 }

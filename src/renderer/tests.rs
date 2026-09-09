@@ -186,7 +186,7 @@ fn draw_specializes_edge() {
     };
     assert_eq!(
         renderer.draw_edge(&edge),
-        "\"Vec<String>\" <|-- \"Vec<T>\"\n".to_string()
+        "\"Vec<String>\" ..|> \"Vec<T>\"\n".to_string()
     );
 }
 
