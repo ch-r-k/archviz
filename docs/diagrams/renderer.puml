@@ -1,0 +1,42 @@
+@startuml
+
+package "external" {
+class Node
+}
+
+package "module_tree" {
+class "ModuleTree" as module_tree__ModuleTree
+class "BTreeMap<String, ModuleTree>" <String, ModuleTree>
+class "Vec<Node>" <Node>
+}
+
+package "plantuml" {
+class "PlantUmlRenderer" as plantuml__PlantUmlRenderer
+}
+
+package "std" {
+class "BTreeMap<T>" <T>
+class "Vec<T>" <T>
+class String
+}
+
+package "traits" {
+interface "DrawNode" as traits__DrawNode
+interface "DrawEdge" as traits__DrawEdge
+interface "Renderer" as traits__Renderer
+}
+
+
+module_tree__ModuleTree --> "BTreeMap<String, ModuleTree>" : contains
+"BTreeMap<String, ModuleTree>" ..|> "BTreeMap<T>"
+"BTreeMap<String, ModuleTree>" --> String : contains
+"BTreeMap<String, ModuleTree>" --> module_tree__ModuleTree : contains
+module_tree__ModuleTree --> "Vec<Node>" : contains
+"Vec<Node>" ..|> "Vec<T>"
+"Vec<Node>" --> Node : contains
+plantuml__PlantUmlRenderer ..|> traits__Renderer
+plantuml__PlantUmlRenderer ..|> traits__DrawNode
+plantuml__PlantUmlRenderer ..|> traits__DrawEdge
+
+@enduml
+

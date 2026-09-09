@@ -1,0 +1,71 @@
+@startuml
+
+package "ast_parser" {
+class "ParsedModule" as ast_parser__ParsedModule
+class "Vec<String>" <String>
+class "AstParser" as ast_parser__AstParser
+}
+
+package "external" {
+class File
+class Visit
+class Graph
+}
+
+package "graph_builder" {
+class "GraphBuilder" as graph_builder__GraphBuilder
+}
+
+package "std" {
+class "Vec<T>" <T>
+class "Option<T>" <T>
+class "Box<T>" <T>
+class String
+class Default
+}
+
+package "traits" {
+interface "Parser" as traits__Parser
+}
+
+package "type_expr" {
+enum "TypeExpr" as type_expr__TypeExpr
+class "Vec<TypeExpr>" <TypeExpr>
+class "Box<TypeExpr>" <TypeExpr>
+}
+
+package "type_extractor" {
+class "TypeExtractor" as type_extractor__TypeExtractor
+}
+
+package "visitor" {
+class "GraphVisitor" as visitor__GraphVisitor
+class "Option<String>" <String>
+}
+
+
+ast_parser__ParsedModule --> "Vec<String>" : contains
+"Vec<String>" ..|> "Vec<T>"
+"Vec<String>" --> String : contains
+ast_parser__ParsedModule --> File : contains
+ast_parser__AstParser ..|> traits__Parser
+type_extractor__TypeExtractor ..|> Default
+visitor__GraphVisitor --> graph_builder__GraphBuilder : contains
+visitor__GraphVisitor --> type_extractor__TypeExtractor : contains
+visitor__GraphVisitor --> "Option<String>" : contains
+"Option<String>" ..|> "Option<T>"
+"Option<String>" --> String : contains
+visitor__GraphVisitor ..|> Visit
+graph_builder__GraphBuilder --> Graph : contains
+graph_builder__GraphBuilder --> "Vec<String>" : contains
+type_expr__TypeExpr --> String : contains
+type_expr__TypeExpr --> "Vec<TypeExpr>" : contains
+"Vec<TypeExpr>" ..|> "Vec<T>"
+"Vec<TypeExpr>" --> type_expr__TypeExpr : contains
+type_expr__TypeExpr --> "Box<TypeExpr>" : contains
+"Box<TypeExpr>" ..|> "Box<T>"
+"Box<TypeExpr>" --> type_expr__TypeExpr : contains
+type_expr__TypeExpr --> "Vec<String>" : contains
+
+@enduml
+

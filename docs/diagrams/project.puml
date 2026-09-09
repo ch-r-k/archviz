@@ -1,0 +1,27 @@
+@startuml
+
+package "loader" {
+class "ProjectLoader" as loader__ProjectLoader
+}
+
+package "source_file" {
+class "SourceFile" as source_file__SourceFile
+class "Vec<String>" <String>
+}
+
+package "std" {
+class "Vec<T>" <T>
+class PathBuf
+class String
+}
+
+
+loader__ProjectLoader --> PathBuf : contains
+source_file__SourceFile --> PathBuf : contains
+source_file__SourceFile --> "Vec<String>" : contains
+"Vec<String>" ..|> "Vec<T>"
+"Vec<String>" --> String : contains
+source_file__SourceFile --> String : contains
+
+@enduml
+

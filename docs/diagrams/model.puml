@@ -1,0 +1,60 @@
+@startuml
+
+package "edge" {
+enum "Relation" as edge__Relation
+class "Edge" as edge__Edge
+}
+
+package "graph" {
+class "Graph" as graph__Graph
+class "Vec<Node>" <Node>
+class "Vec<Edge>" <Edge>
+class "HashSet<NodeId>" <NodeId>
+}
+
+package "node" {
+class "NodeId" as node__NodeId
+enum "NodeKind" as node__NodeKind
+class "Option<String>" <String>
+class "Node" as node__Node
+class "Vec<String>" <String>
+}
+
+package "origin" {
+enum "TypeOrigin" as origin__TypeOrigin
+}
+
+package "std" {
+class "Option<T>" <T>
+class "Vec<T>" <T>
+class "HashSet<T>" <T>
+class String
+class Display
+}
+
+
+edge__Edge --> node__NodeId : contains
+edge__Edge --> edge__Relation : contains
+node__NodeId --> String : contains
+node__NodeId ..|> Display
+node__NodeKind --> "Option<String>" : contains
+"Option<String>" ..|> "Option<T>"
+"Option<String>" --> String : contains
+node__Node --> node__NodeId : contains
+node__Node --> String : contains
+node__Node --> node__NodeKind : contains
+node__Node --> "Vec<String>" : contains
+"Vec<String>" ..|> "Vec<T>"
+"Vec<String>" --> String : contains
+graph__Graph --> "Vec<Node>" : contains
+"Vec<Node>" ..|> "Vec<T>"
+"Vec<Node>" --> node__Node : contains
+graph__Graph --> "Vec<Edge>" : contains
+"Vec<Edge>" ..|> "Vec<T>"
+"Vec<Edge>" --> edge__Edge : contains
+graph__Graph --> "HashSet<NodeId>" : contains
+"HashSet<NodeId>" ..|> "HashSet<T>"
+"HashSet<NodeId>" --> node__NodeId : contains
+
+@enduml
+

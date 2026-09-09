@@ -1,0 +1,52 @@
+@startuml
+
+class FilterOptions
+class "Vec<String>" <String>
+package "module_filter" {
+class "ModuleFilter" as module_filter__ModuleFilter
+}
+
+package "pattern" {
+enum "Segment" as pattern__Segment
+class "ModulePattern" as pattern__ModulePattern
+class "Vec<Segment>" <Segment>
+}
+
+package "spec" {
+enum "Decision" as spec__Decision
+class "FilterSpec" as spec__FilterSpec
+class "Vec<ModulePattern>" <ModulePattern>
+class "Option<usize>" <usize>
+}
+
+package "std" {
+class "Vec<T>" <T>
+class "Option<T>" <T>
+class usize
+class String
+}
+
+package "traits" {
+interface "Filter" as traits__Filter
+}
+
+
+spec__FilterSpec --> "Vec<ModulePattern>" : contains
+"Vec<ModulePattern>" ..|> "Vec<T>"
+"Vec<ModulePattern>" --> pattern__ModulePattern : contains
+spec__FilterSpec --> "Option<usize>" : contains
+"Option<usize>" ..|> "Option<T>"
+"Option<usize>" --> usize : contains
+pattern__Segment --> String : contains
+pattern__ModulePattern --> "Vec<Segment>" : contains
+"Vec<Segment>" ..|> "Vec<T>"
+"Vec<Segment>" --> pattern__Segment : contains
+module_filter__ModuleFilter --> spec__FilterSpec : contains
+module_filter__ModuleFilter ..|> traits__Filter
+FilterOptions --> "Vec<String>" : contains
+"Vec<String>" ..|> "Vec<T>"
+"Vec<String>" --> String : contains
+FilterOptions --> "Option<usize>" : contains
+
+@enduml
+

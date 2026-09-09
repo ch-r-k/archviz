@@ -1,0 +1,20 @@
+@startuml
+
+package "edge_target_resolver" {
+class "EdgeTargetResolver" as edge_target_resolver__EdgeTargetResolver
+}
+
+package "origin_resolver" {
+class "OriginResolver" as origin_resolver__OriginResolver
+}
+
+package "traits" {
+interface "GraphEnricher" as traits__GraphEnricher
+}
+
+
+origin_resolver__OriginResolver ..|> traits__GraphEnricher
+edge_target_resolver__EdgeTargetResolver ..|> traits__GraphEnricher
+
+@enduml
+

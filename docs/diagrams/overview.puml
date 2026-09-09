@@ -1,0 +1,98 @@
+@startuml
+
+package enricher {
+}
+
+package filter {
+}
+
+package model {
+}
+
+package parser {
+}
+
+package project {
+}
+
+package renderer {
+}
+
+package "cli" {
+class "Cli" as cli__Cli
+class "CliFilter" as cli__CliFilter
+class "Option<usize>" <usize>
+}
+
+package "error" {
+enum "ArchError" as error__ArchError
+}
+
+package "external" {
+class File
+class Visit
+}
+
+package "pipeline" {
+class "Pipeline" as pipeline__Pipeline
+class "PipelineBuilder" as pipeline__PipelineBuilder
+}
+
+package "std" {
+class "Option<T>" <T>
+class "Vec<T>" <T>
+class "HashSet<T>" <T>
+class "BTreeMap<T>" <T>
+class "Box<T>" <T>
+class String
+class Display
+class usize
+class Default
+class PathBuf
+class Error
+}
+
+
+pipeline__Pipeline --> String : contains
+pipeline__Pipeline --> parser : contains
+pipeline__Pipeline --> enricher : contains
+pipeline__Pipeline --> filter : contains
+pipeline__Pipeline --> renderer : contains
+pipeline__PipelineBuilder --> String : contains
+pipeline__PipelineBuilder --> parser : contains
+pipeline__PipelineBuilder --> enricher : contains
+pipeline__PipelineBuilder --> filter : contains
+pipeline__PipelineBuilder --> renderer : contains
+model --> String : contains
+model ..|> Display
+model ..|> "Option<T>"
+model ..|> "Vec<T>"
+model ..|> "HashSet<T>"
+cli__Cli --> String : contains
+cli__Cli --> cli__CliFilter : contains
+cli__CliFilter --> model : contains
+cli__CliFilter --> "Option<usize>" : contains
+"Option<usize>" ..|> "Option<T>"
+"Option<usize>" --> usize : contains
+renderer ..|> "BTreeMap<T>"
+renderer --> String : contains
+renderer --> model : contains
+filter ..|> "Vec<T>"
+filter --> "Option<usize>" : contains
+filter --> String : contains
+filter --> model : contains
+parser --> model : contains
+parser --> File : contains
+parser ..|> Default
+parser ..|> Visit
+parser --> String : contains
+parser ..|> "Vec<T>"
+parser ..|> "Box<T>"
+project --> PathBuf : contains
+project --> model : contains
+project --> String : contains
+error__ArchError --> Error : contains
+error__ArchError --> String : contains
+
+@enduml
+
