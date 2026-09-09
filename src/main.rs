@@ -1,33 +1,35 @@
-mod extractor;
+mod cli;
+mod enricher;
+mod error;
+mod filter;
 mod model;
+mod parser;
+mod pipeline;
+mod project;
 mod renderer;
 
 use anyhow::Result;
-use std::ffi::OsStr;
-use syn::visit::Visit;
-use walkdir::WalkDir;
-
-use crate::extractor::extractor::Extractor;
-use crate::renderer::plant_uml::generate_plantuml;
+use filter::FilterOptions;
+use pipeline::Pipeline;
 
 fn main() -> Result<()> {
-    let root = std::env::args().nth(1).expect("Usage: archviz <path>");
+    let cli = cli::parse()?;
 
-    let mut extractor = Extractor::new();
+    // main.rs is the composition root: it copies the CLI's raw string
+    // args into the pipeline's `FilterOptions` boundary type. Neither
+    // side needs to know about the other's concrete types.
+    let filter_options = FilterOptions {
+        includes: cli.filter.includes,
+        excludes: cli.filter.excludes,
+        collapses: cli.filter.collapses,
+        collapse_depth: cli.filter.collapse_depth,
+    };
 
-    for entry in WalkDir::new(root) {
-        let entry = entry?;
-
-        if entry.file_type().is_file() && entry.path().extension() == Some(OsStr::new("rs")) {
-            let source = std::fs::read_to_string(entry.path())?;
-            let ast = syn::parse_file(&source)?;
-            extractor.visit_file(&ast);
-        }
-    }
-
-    let uml = generate_plantuml(&extractor.graph);
-
-    println!("{uml}");
+    let output = Pipeline::builder(cli.root)
+        .with_filter_options(filter_options)?
+        .build()
+        .run()?;
+    println!("{}", output);
 
     Ok(())
 }
