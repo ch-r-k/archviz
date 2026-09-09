@@ -126,6 +126,18 @@ cargo run -- example/src \
 
 ## Default behavior
 
-When none of the three flags is passed, no filter enricher is added to
-the pipeline and the output matches archviz's pre-filter behavior
+When none of the four filter flags is passed, no `Filter` stage is added
+to the pipeline and the output matches archviz's pre-filter behavior
 exactly — zero regression.
+
+## Internals
+
+`ModuleFilter` (`src/filter/module_filter.rs`) is the sole
+implementation of the `Filter` trait (`src/filter/traits.rs`,
+`fn apply(&self, graph: &mut Graph)`). The `Filter` stage is its own
+slot on `Pipeline`, run *after* every `GraphEnricher` and *before* the
+`Renderer`. The CLI (`src/cli.rs`) collects filter flags as plain
+strings on `CliFilter` and hands them to
+`PipelineBuilder::with_filter_options`, which parses them into
+`ModulePattern`s inside `src/filter/`. CLI code never touches those
+types directly.

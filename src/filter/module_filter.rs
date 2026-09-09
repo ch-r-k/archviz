@@ -1,9 +1,8 @@
-//! `GraphEnricher` that applies a [`FilterSpec`] to the graph.
+//! Filter stage that applies a [`FilterSpec`] to the graph.
 //!
-//! Runs at the *end* of the enricher chain (after `EdgeTargetResolver`
-//! and `OriginResolver`), so every edge target is already a resolved
-//! [`NodeId`] and node drop / edge redirection are mechanical rewrites,
-//! not heuristics.
+//! Runs after all enrichers (so every edge target is already a resolved
+//! [`NodeId`]) and before the renderer. Node drop and edge redirection
+//! are mechanical rewrites, not heuristics.
 //!
 //! Steps:
 //! 1. Compute per-node `(Decision, Option<collapse_root>)` from
@@ -19,9 +18,9 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use crate::enricher::GraphEnricher;
 use crate::filter::pattern::ModulePattern;
 use crate::filter::spec::{Decision, FilterSpec};
+use crate::filter::traits::Filter;
 use crate::model::node::NodeId;
 use crate::model::{Edge, Graph, Node, NodeKind};
 
@@ -104,8 +103,8 @@ impl ModuleFilter {
     }
 }
 
-impl GraphEnricher for ModuleFilter {
-    fn enrich(&self, graph: &mut Graph) {
+impl Filter for ModuleFilter {
+    fn apply(&self, graph: &mut Graph) {
         if self.spec.is_empty() {
             return;
         }

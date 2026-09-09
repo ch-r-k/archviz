@@ -24,10 +24,13 @@ flowchart TD
     P -->|"3 . GraphVisitor::new(&mut graph, ...).visit_module(...)"| GV["GraphVisitor\n(src/parser/visitor.rs)"]
     GV -->|"populates"| G["Graph\n(src/model, nodes + edges)"]
 
-    P -->|"4 . for each enricher: enricher.enrich(&mut graph)"| EN["GraphEnricher chain\n(EdgeTargetResolver → OriginResolver\n→ ModuleFilter, opt-in)\n(src/enricher)"]
+    P -->|"4 . for each enricher: enricher.enrich(&mut graph)"| EN["GraphEnricher chain\n(EdgeTargetResolver → OriginResolver)\n(src/enricher)"]
     EN -->|"mutates"| G
 
-    P -->|"5 . renderer.render(&graph)"| R["Renderer (PlantUmlRenderer)\n(src/renderer)"]
+    P -->|"5 . for each filter: filter.apply(&mut graph)"| F["Filter chain\n(ModuleFilter, opt-in)\n(src/filter)"]
+    F -->|"mutates"| G
+
+    P -->|"6 . renderer.render(&graph)"| R["Renderer (PlantUmlRenderer)\n(src/renderer)"]
     R -->|"String"| P
 
     P -->|"println!"| Out["PlantUML output"]
@@ -43,7 +46,9 @@ order:
    `.visit_module(&parsed)`, which walks the AST and pushes `Node`s/`Edge`s.
 4. After *all* files are parsed, call `enricher.enrich(&mut graph)` for
    every enricher in `self.enrichers`, in order.
-5. Call `self.renderer.render(&graph)` to produce the final output string.
+5. Then call `filter.apply(&mut graph)` for every filter in
+   `self.filters`, in order.
+6. Call `self.renderer.render(&graph)` to produce the final output string.
 
 ## Stages
 
@@ -113,16 +118,17 @@ run in order, so additional enrichment passes (e.g. computing metrics,
 filtering, or adding annotations) can be added without touching existing
 ones.
 
-`ModuleFilter` (`src/enricher/module_filter.rs`) is an **opt-in**
-enricher appended to the chain when the user passes `--include`,
-`--exclude`, or `--collapse` on the command line. It runs *after* the
-resolvers so every edge target is a resolved [`NodeId`]; it drops nodes
-that match `--exclude` (or that don't match `--include`), and collapses
-`--collapse` matches into a single synthetic `NodeKind::Package` node
-whose incoming edges are redirected to the package. See
+`ModuleFilter` (`src/filter/module_filter.rs`) lives in its **own**
+pipeline stage — the `Filter` trait (`src/filter/traits.rs`, one method
+`apply(&self, graph: &mut Graph)`). Filters run *after* all enrichers so
+every edge target is a resolved `NodeId`, and *before* the renderer.
+`ModuleFilter` is opt-in: `PipelineBuilder::with_filter_options` accepts
+a plain-data `FilterOptions { includes, excludes, collapses,
+collapse_depth }` — raw strings straight from the CLI — and parses them
+internally, so the CLI never sees `ModulePattern` or `FilterSpec`. See
 `docs/filtering.md` for pattern syntax and worked examples.
 
-### 4. `Renderer` (`src/renderer/`)
+### 5. `Renderer` (`src/renderer/`)
 
 `Renderer` is a supertrait of `DrawNode` + `DrawEdge`. Its `render(&self,
 graph: &Graph) -> String` method has a default implementation that emits
@@ -147,6 +153,9 @@ files ─▶ Parser ─▶ Graph (built incrementally per file)
               GraphEnricher(s) (mutate Graph in place)
                      │
                      ▼
+              Filter(s) (opt-in; reshape/reduce Graph)
+                     │
+                     ▼
                  Renderer (Graph → String)
 ```
 
@@ -163,20 +172,26 @@ let output = Pipeline::builder(root).build().run()?;
 ```
 
 `PipelineBuilder::new` supplies the default implementations (`AstParser`,
-the `OriginResolver` enricher, `PlantUmlRenderer`). Callers can override
-any stage before calling `.build()`:
+the `EdgeTargetResolver` + `OriginResolver` enrichers, no filters,
+`PlantUmlRenderer`). Callers can override any stage before calling
+`.build()`:
 
 ```rust
 Pipeline::builder(root)
     .with_parser(MyParser)
     .with_enricher(MyExtraEnricher)
+    .with_filter(MyFilter)                 // or:
+    .with_filter_options(FilterOptions {   // raw-string front-end path
+        includes: vec!["renderer".into()],
+        ..Default::default()
+    })?
     .with_renderer(MyRenderer)
     .build()
     .run()?;
 ```
 
 `Pipeline::run` performs the actual orchestration described above: load
-files, parse + visit each one into the `Graph`, run all enrichers, then
-render. See `design-patterns.md` for the design patterns behind this
+files, parse + visit each one into the `Graph`, run all enrichers, run
+all filters, then render. See `design-patterns.md` for the design patterns behind this
 wiring (trait objects, builder pattern, strategy pattern, visitor
 pattern).

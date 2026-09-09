@@ -152,7 +152,7 @@ fn analyzes_own_source_tree() {
         "pipeline__PipelineBuilder",
         "parser__ast_parser__AstParser",
         "enricher__origin_resolver__OriginResolver",
-        "enricher__module_filter__ModuleFilter",
+        "filter__module_filter__ModuleFilter",
         "renderer__plantuml__PlantUmlRenderer",
         "filter__spec__FilterSpec",
     ];
@@ -230,8 +230,8 @@ fn literal_collapse_covers_descendants_on_self() {
 
     assert_plantuml_envelope(&out);
     assert!(
-        !out.contains("enricher__module_filter__ModuleFilter"),
-        "enricher::module_filter class leaked past literal collapse:\n{out}"
+        !out.contains("enricher__edge_target_resolver__EdgeTargetResolver"),
+        "enricher::edge_target_resolver class leaked past literal collapse:\n{out}"
     );
     assert!(
         !out.contains("enricher__origin_resolver__OriginResolver"),
@@ -253,7 +253,7 @@ fn collapse_depth_one_flattens_top_level_on_self() {
     // Every archviz submodule class is gone; only top-level packages
     // remain (plus any depth-1 classes and std/external stubs).
     for gone in [
-        "enricher__module_filter__ModuleFilter",
+        "filter__module_filter__ModuleFilter",
         "renderer__plantuml__PlantUmlRenderer",
         "parser__ast_parser__AstParser",
         "filter__spec__FilterSpec",
@@ -273,7 +273,7 @@ fn collapse_depth_two_keeps_second_level_on_self() {
     assert_plantuml_envelope(&out);
     // At depth 2 the enricher submodule classes are still there (they
     // live at module_path.len() == 2).
-    assert!(out.contains("enricher__module_filter__ModuleFilter"));
+    assert!(out.contains("filter__module_filter__ModuleFilter"));
     assert!(out.contains("renderer__plantuml__PlantUmlRenderer"));
 }
 
@@ -300,7 +300,7 @@ fn literal_include_covers_descendants_on_self() {
         "non-included module leaked into output:\n{out}"
     );
     assert!(
-        !out.contains("enricher__module_filter__ModuleFilter"),
+        !out.contains("filter__module_filter__ModuleFilter"),
         "non-included module leaked into output:\n{out}"
     );
     // Std stubs actually referenced by kept edges must survive.

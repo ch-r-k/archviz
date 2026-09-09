@@ -1,0 +1,17 @@
+{
+    "$schema": "https://opencode.ai/config.json",
+    "provider": {
+        "simplellm": {
+            "npm": "@ai-sdk/openai-compatible",
+            "name": "simplellm",
+            "options": {
+                "baseURL": "https://api.simplellm.eu/v1"
+            },
+            "models": {
+                "DeepSeek-V4-Pro": {
+                    "name": "DeepSeek-V4-Pro"
+                }
+            }
+        }
+    }
+}

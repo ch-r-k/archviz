@@ -42,17 +42,26 @@ pub struct Pipeline {
     root: String,
     parser: Box<dyn Parser>,
     enrichers: Vec<Box<dyn GraphEnricher>>,
+    filters: Vec<Box<dyn Filter>>,
     renderer: Box<dyn Renderer>,
 }
 ```
 
 Adding a new strategy (e.g. a Mermaid or Graphviz renderer) means writing
 `impl Renderer for MyRenderer` — `Pipeline` and the other stages never
-change. `enrichers: Vec<Box<dyn GraphEnricher>>` extends this to a *chain*
-of strategies applied in sequence over the same data — today
-`EdgeTargetResolver`, `OriginResolver`, and (opt-in) `ModuleFilter`
-implement the same trait and are wired into the same chain without any
-of them knowing about the others.
+change. `enrichers: Vec<Box<dyn GraphEnricher>>` and `filters: Vec<Box<dyn
+Filter>>` extend this to *chains* of strategies applied in sequence over
+the same data — enrichers *add* information (`EdgeTargetResolver`,
+`OriginResolver`), while filters *reshape* it based on user intent
+(`ModuleFilter`, opt-in). Each trait lives in its own module and its
+implementations never know about each other.
+
+The CLI ↔ filter boundary is a small applied case of **dependency
+inversion**: `src/cli.rs` only collects raw pattern strings on
+`CliFilter`; `PipelineBuilder::with_filter_options(FilterOptions)` parses
+them internally into `ModulePattern`s. Neither `cli` nor `main` imports
+anything from `filter::pattern` or `filter::spec` — the CLI can't build
+an invalid filter because it can't spell one.
 
 ```mermaid
 classDiagram

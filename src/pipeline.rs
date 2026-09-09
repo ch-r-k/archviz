@@ -2,9 +2,9 @@ use anyhow::{anyhow, Result};
 
 use crate::enricher::GraphEnricher;
 use crate::enricher::edge_target_resolver::EdgeTargetResolver;
-use crate::enricher::module_filter::ModuleFilter;
 use crate::enricher::origin_resolver::OriginResolver;
-use crate::filter::FilterSpec;
+use crate::error::ArchError;
+use crate::filter::{Filter, FilterOptions};
 use crate::model::Graph;
 use crate::parser::visitor::GraphVisitor;
 use crate::parser::{AstParser, Parser};
@@ -16,6 +16,7 @@ pub struct Pipeline {
     root: String,
     parser: Box<dyn Parser>,
     enrichers: Vec<Box<dyn GraphEnricher>>,
+    filters: Vec<Box<dyn Filter>>,
     renderer: Box<dyn Renderer>,
 }
 
@@ -49,6 +50,10 @@ impl Pipeline {
             enricher.enrich(&mut graph);
         }
 
+        for filter in &self.filters {
+            filter.apply(&mut graph);
+        }
+
         if graph.nodes.is_empty() {
             eprintln!(
                 "archviz: no nodes remain after filtering; \
@@ -77,6 +82,7 @@ pub struct PipelineBuilder {
     root: String,
     parser: Box<dyn Parser>,
     enrichers: Vec<Box<dyn GraphEnricher>>,
+    filters: Vec<Box<dyn Filter>>,
     renderer: Box<dyn Renderer>,
 }
 
@@ -89,6 +95,7 @@ impl PipelineBuilder {
             // OriginResolver so that std/external stubs are only
             // created for genuinely unresolved bare targets.
             enrichers: vec![Box::new(EdgeTargetResolver), Box::new(OriginResolver)],
+            filters: Vec::new(),
             renderer: Box::new(PlantUmlRenderer),
         }
     }
@@ -105,14 +112,27 @@ impl PipelineBuilder {
         self
     }
 
-    /// Appends a [`ModuleFilter`] to the enricher chain. A no-op if
-    /// `spec` is empty — matching today's behavior when no filter flags
-    /// are given.
-    pub fn with_module_filter(mut self, spec: FilterSpec) -> Self {
-        if !spec.is_empty() {
-            self.enrichers.push(Box::new(ModuleFilter::new(spec)));
-        }
+    /// Appends a filter stage. Filters run after all enrichers and
+    /// before the renderer.
+    #[allow(dead_code)]
+    pub fn with_filter(mut self, filter: impl Filter + 'static) -> Self {
+        self.filters.push(Box::new(filter));
         self
+    }
+
+    /// Front-end entry point: accept plain-data options (raw pattern
+    /// strings + optional depth) and build a filter stage internally.
+    ///
+    /// This is the *only* API the CLI needs to touch — CLI code stays
+    /// unaware of [`crate::filter::ModulePattern`] / [`crate::filter::FilterSpec`].
+    /// A no-op if `options` is empty.
+    pub fn with_filter_options(mut self, options: FilterOptions) -> Result<Self, ArchError> {
+        if options.is_empty() {
+            return Ok(self);
+        }
+        let filter = options.build()?;
+        self.filters.push(Box::new(filter));
+        Ok(self)
     }
 
     #[allow(dead_code)]
@@ -126,6 +146,7 @@ impl PipelineBuilder {
             root: self.root,
             parser: self.parser,
             enrichers: self.enrichers,
+            filters: self.filters,
             renderer: self.renderer,
         }
     }
