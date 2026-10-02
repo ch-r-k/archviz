@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use crate::enricher::GraphEnricher;
 use crate::model::node::NodeId;
 use crate::model::{Graph, NodeKind};
+use crate::resolution::ResolutionContext;
 
 /// Resolution rules for each bare target `Foo` seen on an edge:
 /// 1. If a synthetic node already has bare id `Foo` (compound types,
@@ -31,7 +32,7 @@ use crate::model::{Graph, NodeKind};
 pub struct EdgeTargetResolver;
 
 impl GraphEnricher for EdgeTargetResolver {
-    fn enrich(&self, graph: &mut Graph) {
+    fn enrich(&self, graph: &mut Graph, _ctx: &ResolutionContext<'_>) {
         let (synthetic_ids, by_display) = index_nodes(graph);
 
         for edge in &mut graph.edges {

@@ -11,6 +11,8 @@ use crate::parser::{AstParser, Parser};
 use crate::project::{ProjectLoader, SourceFile};
 use crate::renderer::Renderer;
 use crate::renderer::plantuml::PlantUmlRenderer;
+use crate::resolution::{CrateIndex, ResolutionContext};
+use std::path::Path;
 
 pub struct Pipeline {
     root: String,
@@ -46,8 +48,12 @@ impl Pipeline {
             return Err(anyhow!("no source files could be parsed"));
         }
 
+        let crate_index = CrateIndex::discover(Path::new(&self.root));
+        let ctx = ResolutionContext {
+            crate_index: crate_index.as_ref(),
+        };
         for enricher in &self.enrichers {
-            enricher.enrich(&mut graph);
+            enricher.enrich(&mut graph, &ctx);
         }
 
         for filter in &self.filters {

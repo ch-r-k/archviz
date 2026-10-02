@@ -1,65 +1,46 @@
 use std::collections::HashSet;
 use std::sync::OnceLock;
 
-/// Where a referenced type comes from, relative to the analyzed project.
-///
-/// Determined heuristically from the type's base name. A later pass could
-/// swap this out for a rust-analyzer / rustc-driven resolver for exact
-/// answers.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TypeOrigin {
-    /// Defined somewhere in the project being analyzed (a node already
-    /// exists in the graph with this base name).
-    Local,
-    /// From the Rust standard library or a language primitive.
-    Std,
-    /// Anything else — assumed to come from an external crate/dependency.
-    External,
+/// The final path segment of a (possibly qualified) type name:
+/// `"anyhow::Error"` → `"Error"`, `"String"` → `"String"`.
+pub fn base_name(name: &str) -> &str {
+    name.rsplit("::").next().unwrap_or(name)
 }
 
-impl TypeOrigin {
-    /// Module path used to place a synthetic node representing this origin
-    /// inside the diagram. `Local` returns `None` because local types already
-    /// have their own module path from the parser.
-    pub fn module_path(&self) -> Option<Vec<String>> {
-        match self {
-            TypeOrigin::Local => None,
-            TypeOrigin::Std => Some(vec!["std".to_string()]),
-            TypeOrigin::External => Some(vec!["external".to_string()]),
-        }
-    }
+/// The first path segment of a (possibly qualified) type name:
+/// `"std::collections::HashMap"` → `"std"`, `"String"` → `"String"`.
+pub fn first_segment(name: &str) -> &str {
+    name.split("::").next().unwrap_or(name)
 }
 
-/// Classifies a type base name.
-///
-/// * If `local_names` contains it → `Local`.
-/// * Else if it is a known std/primitive name → `Std`.
-/// * Else → `External`.
-pub fn classify(base: &str, local_names: &HashSet<String>) -> TypeOrigin {
-    if local_names.contains(base) {
-        TypeOrigin::Local
-    } else if is_std_name(base) {
-        TypeOrigin::Std
-    } else {
-        TypeOrigin::External
-    }
+/// `true` for the standard-library crate roots a qualified path can start
+/// with (`std::…`, `core::…`, `alloc::…`).
+pub fn is_lang_root(segment: &str) -> bool {
+    segment == "std" || segment == "core" || segment == "alloc"
 }
 
 /// Names considered part of the Rust standard library or built-in primitives.
 ///
-/// Kept intentionally conservative — anything not on this list falls through
-/// to `External`. Extend as needed.
-pub fn is_std_name(base: &str) -> bool {
-    std_name_set().contains(base)
+/// Accepts both a bare base name (`"String"`) and a fully-qualified path
+/// (`"std::collections::HashMap"`), classifying the latter by its leading
+/// crate root. Anything else falls through to `External`.
+pub fn is_std_name(name: &str) -> bool {
+    if name.contains("::") {
+        // A qualified path is std only when rooted at a language crate;
+        // `anyhow::Error` must not match just because `Error` is listed.
+        return is_lang_root(first_segment(name));
+    }
+    std_name_set().contains(name)
 }
 
 /// Returns `true` for identifiers that look like generic type parameters
 /// rather than real types (`T`, `E`, `K`, `V`, `R`, `T1`, …). Both the
 /// parser (when emitting composition edges to field types) and the
 /// enricher (when materializing external stubs) use this to avoid
-/// polluting the graph with placeholder nodes.
+/// polluting the graph with placeholder nodes. Qualified names are judged
+/// by their final segment.
 pub fn looks_like_type_param(name: &str) -> bool {
-    let mut chars = name.chars();
+    let mut chars = base_name(name).chars();
     match (chars.next(), chars.next(), chars.next()) {
         (Some(c), None, _) => c.is_ascii_uppercase(),
         (Some(c), Some(d), None) => c.is_ascii_uppercase() && d.is_ascii_digit(),
@@ -105,3 +86,39 @@ const PRIMITIVES: &[&str] = &[
     "i8", "i16", "i32", "i64", "i128", "isize",
     "f32", "f64", "()", "tuple", "_",
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn base_name_strips_path() {
+        assert_eq!(base_name("anyhow::Error"), "Error");
+        assert_eq!(base_name("std::collections::HashMap"), "HashMap");
+        assert_eq!(base_name("String"), "String");
+    }
+
+    #[test]
+    fn first_segment_strips_path() {
+        assert_eq!(first_segment("anyhow::Error"), "anyhow");
+        assert_eq!(first_segment("std::collections::HashMap"), "std");
+        assert_eq!(first_segment("String"), "String");
+    }
+
+    #[test]
+    fn lang_roots_recognized() {
+        assert!(is_lang_root("std"));
+        assert!(is_lang_root("core"));
+        assert!(is_lang_root("alloc"));
+        assert!(!is_lang_root("anyhow"));
+    }
+
+    #[test]
+    fn std_name_accepts_bare_and_qualified() {
+        assert!(is_std_name("String"));
+        assert!(is_std_name("std::collections::HashMap"));
+        assert!(is_std_name("core::fmt::Debug"));
+        assert!(!is_std_name("anyhow::Error"), "qualified external name must not match std");
+        assert!(!is_std_name("Serde"));
+    }
+}

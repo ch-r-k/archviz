@@ -102,16 +102,25 @@ relation }`.
 
 Runs *after* all files have been parsed, so it can see the complete graph.
 The `GraphEnricher` trait has one method, `enrich(&self, graph: &mut
-Graph)`. One implementation ships by default:
+Graph, ctx: &ResolutionContext)`, where `ResolutionContext` carries run-level
+inputs such as the optional `CrateIndex`. Two implementations ship by
+default:
 
-`OriginResolver` (`src/enricher/origin_resolver.rs`) iterates every edge
-target and classifies it as `Local` (already a node in the graph), `Std`
-(matches a known stdlib / primitive name), or `External`. Targets with no
-matching node yet are materialized as synthetic stub nodes placed under
-the `std` or `external` package so they appear in the diagram, cleanly
-separated from project-local types. The classification is name-based (see
-`src/model/origin.rs`); a later revision could delegate to rust-analyzer
-for precise resolution.
+`EdgeTargetResolver` (`src/enricher/edge_target_resolver.rs`) promotes
+bare edge targets to fully-qualified local `NodeId`s whenever the display
+name unambiguously identifies a source-level node (with a same-module
+preference for ambiguous names).
+
+`OriginResolver` (`src/enricher/origin_resolver.rs`) iterates every still
+unresolved edge target and materializes a synthetic stub node under the
+`std` or `external` package so referenced types appear in the diagram.
+Qualified targets (`std::collections::HashMap`, `syn::Error`) are
+classified by their leading path segment, grouped by crate name under
+`external::<crate>::…`; `crate::`/`self::`/`super::` paths are left for
+lexical resolution. The crate universe comes from `CrateIndex`
+(`src/resolution/metadata.rs`), built by running `cargo metadata --offline`
+against the nearest `Cargo.toml`; bare names and directories with no
+manifest fall back to the std/primitive name list.
 
 `Pipeline` supports **multiple** enrichers (`Vec<Box<dyn GraphEnricher>>`),
 run in order, so additional enrichment passes (e.g. computing metrics,

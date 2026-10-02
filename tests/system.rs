@@ -205,6 +205,19 @@ fn analyzes_own_source_tree() {
             "expected `{expected}` in self-analysis output"
         );
     }
+
+    // Milestone A regression: qualified external paths are nested by crate
+    // name (`syn::Error` → package external::syn), and qualified std paths
+    // stay under `std` (`std::io::Error` → std package), driven by
+    // `cargo metadata` rather than the base-name list.
+    assert!(
+        out.contains("package \"syn\""),
+        "expected nested `syn` crate package from cargo-metadata classification:\n{out}"
+    );
+    assert!(
+        out.contains("std__io__Error"),
+        "expected resolved std-qualified `std::io::Error` node:\n{out}"
+    );
 }
 
 #[test]

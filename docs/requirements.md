@@ -80,6 +80,14 @@ that item for what's missing).
   collapses every module deeper than `N` levels into its ancestor at
   depth `N`. When combined with `--collapse` patterns, the shorter
   (outermost) collapse root wins.
+- [x] FR24: The tool shall classify referenced types whose source
+  spelling is a qualified path (`std::…`, `core::…`, `alloc::…`, or
+  `external_crate::…`) by that path rather than by base name alone,
+  grouping external-crate stubs under `external::<crate>::…`.
+  > Implemented: the parser preserves the full type-path spelling and
+  > `OriginResolver` classifies by the leading segment, using the crate
+  > index produced by `cargo metadata --offline`. Bare names still fall
+  > back to the std/primitive name list.
 
 ### Rendering / output
 
@@ -107,6 +115,9 @@ that item for what's missing).
 - [x] NFR1: The tool shall be usable as a single self-contained
   command-line binary (`cargo run -- <path>` / a compiled executable),
   requiring no network access or external services to run.
+  > Note: origin classification shells out to `cargo metadata --offline`
+  > when a `Cargo.toml` is present; `cargo` must be on `PATH`, but no
+  > network is required and bare-source directories keep working without it.
 - [x] NFR2: Each pipeline stage (loading, parsing, enrichment, rendering)
   shall be independently testable and swappable, so that new languages,
   analyses, or output formats can be added with minimal changes to

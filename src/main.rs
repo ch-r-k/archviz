@@ -7,6 +7,7 @@ mod parser;
 mod pipeline;
 mod project;
 mod renderer;
+mod resolution;
 
 use anyhow::Result;
 use filter::FilterOptions;

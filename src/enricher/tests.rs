@@ -5,6 +5,16 @@ use crate::enricher::edge_target_resolver::EdgeTargetResolver;
 use crate::enricher::origin_resolver::OriginResolver;
 use crate::model::node::NodeId;
 use crate::model::{Edge, Graph, Node, NodeKind, Relation};
+use crate::resolution::{CrateIndex, ResolutionContext};
+
+fn empty_ctx() -> ResolutionContext<'static> {
+    ResolutionContext { crate_index: None }
+}
+
+fn index_with(crates: &[&str]) -> CrateIndex {
+    let names = crates.iter().map(|c| c.to_string()).collect();
+    CrateIndex::new(names)
+}
 
 fn node(name: &str, kind: NodeKind, module_path: Vec<String>) -> Node {
     Node {
@@ -34,7 +44,7 @@ fn classifies_std_type_under_std_package() {
         relation: Relation::Composition,
     });
 
-    OriginResolver.enrich(&mut graph);
+    OriginResolver.enrich(&mut graph, &empty_ctx());
 
     let string_node = graph
         .nodes
@@ -53,7 +63,7 @@ fn classifies_unknown_as_external() {
         relation: Relation::Composition,
     });
 
-    OriginResolver.enrich(&mut graph);
+    OriginResolver.enrich(&mut graph, &empty_ctx());
 
     let n = graph
         .nodes
@@ -75,7 +85,7 @@ fn does_not_emit_local_stub() {
     });
 
     let before = graph.nodes.len();
-    OriginResolver.enrich(&mut graph);
+    OriginResolver.enrich(&mut graph, &empty_ctx());
     assert_eq!(graph.nodes.len(), before);
 }
 
@@ -93,7 +103,7 @@ fn skips_type_parameter_names() {
         relation: Relation::Composition,
     });
 
-    OriginResolver.enrich(&mut graph);
+    OriginResolver.enrich(&mut graph, &empty_ctx());
 
     assert!(
         graph
@@ -114,7 +124,7 @@ fn edge_target_resolver_resolves_unique_display_name() {
         relation: Relation::Composition,
     });
 
-    EdgeTargetResolver.enrich(&mut g);
+    EdgeTargetResolver.enrich(&mut g, &empty_ctx());
     assert_eq!(g.edges[0].to.as_str(), "m::Foo");
 }
 
@@ -130,7 +140,7 @@ fn edge_target_resolver_prefers_same_module() {
         relation: Relation::Composition,
     });
 
-    EdgeTargetResolver.enrich(&mut g);
+    EdgeTargetResolver.enrich(&mut g, &empty_ctx());
     assert_eq!(g.edges[0].to.as_str(), "b::Foo");
 }
 
@@ -144,7 +154,104 @@ fn edge_target_resolver_leaves_unresolved_bare() {
         relation: Relation::Composition,
     });
 
-    EdgeTargetResolver.enrich(&mut g);
+    EdgeTargetResolver.enrich(&mut g, &empty_ctx());
     assert_eq!(g.edges[0].to.as_str(), "String");
+}
+
+#[test]
+fn origin_resolver_nests_external_crate_path() {
+    let mut g = Graph::default();
+    g.add_node(fq_node("m::A", "A", &["m"]));
+    g.edges.push(Edge {
+        from: NodeId("m::A".into()),
+        to: NodeId::bare("anyhow::Error"),
+        relation: Relation::Composition,
+    });
+
+    let index = index_with(&["anyhow"]);
+    let ctx = ResolutionContext {
+        crate_index: Some(&index),
+    };
+    OriginResolver.enrich(&mut g, &ctx);
+
+    let n = g
+        .nodes
+        .iter()
+        .find(|n| n.display_name == "Error")
+        .expect("external stub emitted");
+    assert_eq!(n.module_path, vec!["external".to_string(), "anyhow".to_string()]);
+    assert_eq!(n.id.as_str(), "anyhow::Error");
+}
+
+#[test]
+fn origin_resolver_classifies_lang_root_path_as_std() {
+    let mut g = Graph::default();
+    g.add_node(fq_node("m::A", "A", &["m"]));
+    g.edges.push(Edge {
+        from: NodeId("m::A".into()),
+        to: NodeId::bare("std::collections::HashMap"),
+        relation: Relation::Composition,
+    });
+
+    OriginResolver.enrich(&mut g, &empty_ctx());
+
+    let n = g
+        .nodes
+        .iter()
+        .find(|n| n.display_name == "HashMap")
+        .expect("std stub emitted");
+    assert_eq!(n.module_path, vec!["std".to_string()]);
+}
+
+#[test]
+fn origin_resolver_skips_crate_qualified_path() {
+    let mut g = Graph::default();
+    g.add_node(fq_node("m::A", "A", &["m"]));
+    g.edges.push(Edge {
+        from: NodeId("m::A".into()),
+        to: NodeId::bare("crate::Foo"),
+        relation: Relation::Composition,
+    });
+
+    let before = g.nodes.len();
+    OriginResolver.enrich(&mut g, &empty_ctx());
+    assert_eq!(g.nodes.len(), before, "no stub for crate:: paths");
+}
+
+#[test]
+fn origin_resolver_flat_external_without_index() {
+    let mut g = Graph::default();
+    g.edges.push(Edge {
+        from: NodeId::bare("A"),
+        to: NodeId::bare("serde::Serialize"),
+        relation: Relation::Composition,
+    });
+
+    OriginResolver.enrich(&mut g, &empty_ctx());
+
+    let n = g
+        .nodes
+        .iter()
+        .find(|n| n.display_name == "Serialize")
+        .expect("flat external stub emitted");
+    assert_eq!(n.module_path, vec!["external".to_string()]);
+}
+
+#[test]
+fn resolution_ctx_is_unused_by_edge_target_resolver() {
+    let mut g = Graph::default();
+    g.add_node(fq_node("m::Foo", "Foo", &["m"]));
+    g.edges.push(Edge {
+        from: NodeId::bare("A"),
+        to: NodeId::bare("Foo"),
+        relation: Relation::Composition,
+    });
+
+    let index = index_with(&["anyhow"]);
+    let ctx = ResolutionContext {
+        crate_index: Some(&index),
+    };
+    EdgeTargetResolver.enrich(&mut g, &ctx);
+    assert_eq!(g.edges[0].to.as_str(), "m::Foo");
 }
 

@@ -38,7 +38,9 @@ impl TypeExtractor {
 
     fn extract_path(&self, tp: &syn::TypePath) -> Option<TypeExpr> {
         let seg = tp.path.segments.last()?;
-        let base = seg.ident.to_string();
+        // Keep the full spelling (e.g. `anyhow::Error`, `std::collections::HashMap`)
+        // so downstream stages can classify the type's crate of origin.
+        let base = full_path(&tp.path);
 
         match &seg.arguments {
             syn::PathArguments::None => Some(TypeExpr::Simple(base)),
@@ -79,15 +81,21 @@ impl Default for TypeExtractor {
     }
 }
 
+fn full_path(path: &syn::Path) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    for segment in &path.segments {
+        parts.push(segment.ident.to_string());
+    }
+    parts.join("::")
+}
+
 fn trait_bounds(
     bounds: &syn::punctuated::Punctuated<syn::TypeParamBound, syn::Token![+]>,
 ) -> Vec<String> {
     let mut traits: Vec<String> = Vec::new();
     for b in bounds {
         if let syn::TypeParamBound::Trait(tr) = b {
-            if let Some(s) = tr.path.segments.last() {
-                traits.push(s.ident.to_string());
-            }
+            traits.push(full_path(&tr.path));
         }
     }
     traits

@@ -13,7 +13,7 @@
 //! whole graph promotes them to FQ ids when unambiguous.
 
 use crate::model::node::NodeId;
-use crate::model::origin::{is_std_name, looks_like_type_param};
+use crate::model::origin::{base_name, is_std_name, looks_like_type_param};
 use crate::model::{Edge, Graph, Node, NodeKind, Relation};
 use crate::parser::type_expr::TypeExpr;
 
@@ -85,7 +85,7 @@ impl<'a> GraphBuilder<'a> {
         }
 
         let target = expr.type_name();
-        if looks_like_type_param(&target) || type_params.contains(&target) {
+        if looks_like_type_param(&target) || type_params.iter().any(|p| p == base_name(&target)) {
             return;
         }
         self.push_edge(from, &target, relation.clone());
@@ -105,7 +105,8 @@ impl<'a> GraphBuilder<'a> {
                 for arg in args {
                     let arg = arg.resolve_refs();
                     let name = arg.type_name();
-                    if looks_like_type_param(&name) || type_params.contains(&name) {
+                    if looks_like_type_param(&name) || type_params.iter().any(|p| p == base_name(&name))
+                    {
                         continue;
                     }
                     self.push_edge(from, &name, relation.clone());

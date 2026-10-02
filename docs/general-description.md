@@ -12,8 +12,10 @@ archviz:
    parameters, trait implementations, etc.).
 3. Enriches the resulting model with additional, synthesized information —
    for example, giving compound types such as `Vec<String>` or `Box<dyn
-   Trait>` their own diagram nodes and relationships, even though they have
-   no explicit `struct`/`trait` definition in the source.
+   Trait>` their own diagram nodes and relationships (even though they have
+   no explicit `struct`/`trait` definition in the source), and grouping
+   referenced standard-library and external-crate types under `std` and
+   per-crate `external::<crate>` packages using `cargo metadata`.
 4. Renders the final model as UML diagram markup — currently
    [PlantUML](https://plantuml.com/) class-diagram syntax — which can be fed
    into a PlantUML renderer (CLI, IDE plugin, or web service) to produce an

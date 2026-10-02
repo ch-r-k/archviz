@@ -1,0 +1,56 @@
+@startuml
+
+' example/blinky — static structure
+' Packages mirror the Rust module tree:
+'   application | application_layer::blinky
+'   device_layer::i_user_indication | device_layer::user_indication
+
+package "application" {
+    class Manager {
+        - blinky : Blinky<ConsoleUi>
+        + new() : Manager
+        + run()
+    }
+    class "Blinky<ConsoleUi>" as Blinky_ConsoleUi <<specialization>>
+}
+
+package "application_layer" {
+    package "blinky" {
+        class "Blinky<UiG : IUi>" as Blinky {
+            - ui : UiG
+            + new(ui : UiG) : Blinky<UiG>
+            + run()
+        }
+    }
+}
+
+package "device_layer" {
+    package "i_user_indication" {
+        interface IUi {
+            + render()
+        }
+    }
+
+    package "user_indication" {
+        class ConsoleUi {
+            + render()
+        }
+    }
+}
+
+' Composition: Manager owns a Blinky<ConsoleUi>
+Manager *-- Blinky_ConsoleUi : blinky
+
+' Composition: Blinky<ConsoleUi> owns its ui (a ConsoleUi)
+Blinky_ConsoleUi *-- ConsoleUi : ui
+
+' Generic instantiation: Blinky<ConsoleUi> specializes Blinky<UiG : IUi>
+Blinky_ConsoleUi ..|> Blinky : instantiates
+
+' Generic bound: Blinky reaches IUi only through UiG : IUi
+Blinky ..> IUi : UiG : IUi
+
+' Concrete trait implementation
+ConsoleUi ..|> IUi
+
+@enduml
