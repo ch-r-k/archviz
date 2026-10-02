@@ -20,10 +20,6 @@ class "Node" as node__Node
 class "Vec<String>" <String>
 }
 
-package "origin" {
-enum "TypeOrigin" as origin__TypeOrigin
-}
-
 package "std" {
 class "Option<T>" <T>
 class "Vec<T>" <T>

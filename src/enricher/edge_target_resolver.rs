@@ -29,8 +29,13 @@ use crate::resolution::ResolutionContext;
 ///      output stays deterministic.
 /// 3. No matching local node → leave bare; [`OriginResolver`] will turn
 ///    it into a std/external stub.
+///
+/// Kept as an alternative enricher for comparison/backwards compatibility.
+/// Not used in the default pipeline (LexicalResolver is used instead).
+#[allow(dead_code)]
 pub struct EdgeTargetResolver;
 
+#[allow(dead_code)]
 impl GraphEnricher for EdgeTargetResolver {
     fn enrich(&self, graph: &mut Graph, _ctx: &ResolutionContext<'_>) {
         let (synthetic_ids, by_display) = index_nodes(graph);
@@ -54,6 +59,7 @@ impl GraphEnricher for EdgeTargetResolver {
     }
 }
 
+#[allow(dead_code)]
 fn index_nodes(
     graph: &Graph,
 ) -> (
@@ -83,6 +89,7 @@ fn index_nodes(
     (synthetic_ids, by_display)
 }
 
+#[allow(dead_code)]
 fn choose_candidate(name: &str, owner: &NodeId, candidates: &[NodeId]) -> NodeId {
     if candidates.len() == 1 {
         return candidates[0].clone();
@@ -106,6 +113,7 @@ fn choose_candidate(name: &str, owner: &NodeId, candidates: &[NodeId]) -> NodeId
     candidates[0].clone()
 }
 
+#[allow(dead_code)]
 fn pick_same_module(candidates: &[NodeId], owner_module: Option<&str>) -> Option<NodeId> {
     let owner_module = owner_module?;
     candidates

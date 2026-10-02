@@ -2,13 +2,20 @@
 
 use crate::enricher::GraphEnricher;
 use crate::enricher::edge_target_resolver::EdgeTargetResolver;
+use crate::enricher::lexical_resolver::LexicalResolver;
 use crate::enricher::origin_resolver::OriginResolver;
 use crate::model::node::NodeId;
 use crate::model::{Edge, Graph, Node, NodeKind, Relation};
-use crate::resolution::{CrateIndex, ResolutionContext};
+use crate::resolution::{CrateIndex, ModuleIndex, ResolutionContext};
+use std::sync::LazyLock;
+
+static EMPTY_MODULE_INDEX: LazyLock<ModuleIndex> = LazyLock::new(ModuleIndex::default);
 
 fn empty_ctx() -> ResolutionContext<'static> {
-    ResolutionContext { crate_index: None }
+    ResolutionContext {
+        crate_index: None,
+        module_index: &EMPTY_MODULE_INDEX,
+    }
 }
 
 fn index_with(crates: &[&str]) -> CrateIndex {
@@ -171,6 +178,7 @@ fn origin_resolver_nests_external_crate_path() {
     let index = index_with(&["anyhow"]);
     let ctx = ResolutionContext {
         crate_index: Some(&index),
+        module_index: &ModuleIndex::default(),
     };
     OriginResolver.enrich(&mut g, &ctx);
 
@@ -250,8 +258,9 @@ fn resolution_ctx_is_unused_by_edge_target_resolver() {
     let index = index_with(&["anyhow"]);
     let ctx = ResolutionContext {
         crate_index: Some(&index),
+        module_index: &ModuleIndex::default(),
     };
-    EdgeTargetResolver.enrich(&mut g, &ctx);
+    LexicalResolver.enrich(&mut g, &ctx);
     assert_eq!(g.edges[0].to.as_str(), "m::Foo");
 }
 

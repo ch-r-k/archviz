@@ -32,6 +32,8 @@ impl NodeId {
 
     /// `true` when the id has no `::` segment, i.e. it is not
     /// module-qualified.
+    /// Kept for the legacy `EdgeTargetResolver` enricher.
+    #[allow(dead_code)]
     pub fn is_bare(&self) -> bool {
         !self.0.contains("::")
     }

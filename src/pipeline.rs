@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Result};
 
 use crate::enricher::GraphEnricher;
-use crate::enricher::edge_target_resolver::EdgeTargetResolver;
+use crate::enricher::lexical_resolver::LexicalResolver;
 use crate::enricher::origin_resolver::OriginResolver;
 use crate::error::ArchError;
 use crate::filter::{Filter, FilterOptions};
@@ -11,7 +11,7 @@ use crate::parser::{AstParser, Parser};
 use crate::project::{ProjectLoader, SourceFile};
 use crate::renderer::Renderer;
 use crate::renderer::plantuml::PlantUmlRenderer;
-use crate::resolution::{CrateIndex, ResolutionContext};
+use crate::resolution::{CrateIndex, ModuleIndex, ResolutionContext};
 use std::path::Path;
 
 pub struct Pipeline {
@@ -32,6 +32,10 @@ impl Pipeline {
         let files = loader.load()?;
         let total = files.len();
 
+        // Build the lexical module index from the loaded source files.
+        // This is needed for the lexical resolver.
+        let module_index = ModuleIndex::build(&files);
+
         let mut graph = Graph::default();
         let mut succeeded = 0usize;
 
@@ -51,6 +55,7 @@ impl Pipeline {
         let crate_index = CrateIndex::discover(Path::new(&self.root));
         let ctx = ResolutionContext {
             crate_index: crate_index.as_ref(),
+            module_index: &module_index,
         };
         for enricher in &self.enrichers {
             enricher.enrich(&mut graph, &ctx);
@@ -97,10 +102,10 @@ impl PipelineBuilder {
         Self {
             root: root.into(),
             parser: Box::new(AstParser),
-            // Order matters: EdgeTargetResolver must run before
+            // Order matters: LexicalResolver must run before
             // OriginResolver so that std/external stubs are only
             // created for genuinely unresolved bare targets.
-            enrichers: vec![Box::new(EdgeTargetResolver), Box::new(OriginResolver)],
+            enrichers: vec![Box::new(LexicalResolver), Box::new(OriginResolver)],
             filters: Vec::new(),
             renderer: Box::new(PlantUmlRenderer),
         }

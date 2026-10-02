@@ -24,5 +24,6 @@ cargo run --manifest-path "$ROOT_DIR/Cargo.toml" -- src \
   --collapse model --collapse parser --collapse enricher \
   --collapse filter --collapse renderer --collapse project \
   --collapse cli \
+  --collapse resolution \
   --exclude 'std' \
   > "$OUT_DIR/overview.puml"

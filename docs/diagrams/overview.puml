@@ -21,13 +21,21 @@ package project {
 package renderer {
 }
 
+package resolution {
+}
+
 package "error" {
 enum "ArchError" as error__ArchError
 }
 
 package "external" {
-class File
 class Visit
+class File
+package "syn" {
+class "Ident" as syn__Ident
+class "Error" as syn__Error
+}
+
 }
 
 package "pipeline" {
@@ -45,6 +53,9 @@ pipeline__PipelineBuilder --> enricher : contains
 pipeline__PipelineBuilder --> filter : contains
 pipeline__PipelineBuilder --> renderer : contains
 cli --> model : contains
+resolution --> model : contains
+resolution ..|> Visit
+resolution --> syn__Ident : contains
 renderer --> model : contains
 filter --> cli : contains
 filter --> model : contains
@@ -52,6 +63,7 @@ parser --> model : contains
 parser --> File : contains
 parser ..|> Visit
 project --> model : contains
+error__ArchError --> syn__Error : contains
 
 @enduml
 

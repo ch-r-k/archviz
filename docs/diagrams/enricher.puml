@@ -4,6 +4,10 @@ package "edge_target_resolver" {
 class "EdgeTargetResolver" as edge_target_resolver__EdgeTargetResolver
 }
 
+package "lexical_resolver" {
+class "LexicalResolver" as lexical_resolver__LexicalResolver
+}
+
 package "origin_resolver" {
 class "OriginResolver" as origin_resolver__OriginResolver
 }
@@ -15,6 +19,7 @@ interface "GraphEnricher" as traits__GraphEnricher
 
 origin_resolver__OriginResolver ..|> traits__GraphEnricher
 edge_target_resolver__EdgeTargetResolver ..|> traits__GraphEnricher
+lexical_resolver__LexicalResolver ..|> traits__GraphEnricher
 
 @enduml
 

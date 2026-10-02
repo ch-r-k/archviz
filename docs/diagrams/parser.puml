@@ -55,6 +55,7 @@ visitor__GraphVisitor --> type_extractor__TypeExtractor : contains
 visitor__GraphVisitor --> "Option<String>" : contains
 "Option<String>" ..|> "Option<T>"
 "Option<String>" --> String : contains
+visitor__GraphVisitor --> "Vec<String>" : contains
 visitor__GraphVisitor ..|> Visit
 graph_builder__GraphBuilder --> Graph : contains
 graph_builder__GraphBuilder --> "Vec<String>" : contains
