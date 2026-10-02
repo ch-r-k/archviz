@@ -130,7 +130,7 @@ fn draw_composition_edge() {
     };
     assert_eq!(
         renderer.draw_edge(&edge),
-        "User --> Profile : contains\n".to_string()
+        "User --* Profile : contains\n".to_string()
     );
 }
 
@@ -144,7 +144,7 @@ fn draw_composition_edge_with_fq_ids() {
     };
     assert_eq!(
         renderer.draw_edge(&edge),
-        "m1__A --> m2__B : contains\n".to_string()
+        "m1__A --* m2__B : contains\n".to_string()
     );
 }
 
@@ -158,7 +158,7 @@ fn draw_composition_edge_with_generic_type() {
     };
     assert_eq!(
         renderer.draw_edge(&edge),
-        "Repository --> \"Vec<Item>\" : contains\n".to_string()
+        "Repository --* \"Vec<Item>\" : contains\n".to_string()
     );
 }
 

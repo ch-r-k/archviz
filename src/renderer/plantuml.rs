@@ -75,7 +75,7 @@ impl DrawEdge for PlantUmlRenderer {
         let from = edge_ref(edge.from.as_str());
         let to = edge_ref(edge.to.as_str());
         match edge.relation {
-            Relation::Composition => format!("{} --> {} : contains\n", from, to),
+            Relation::Composition => format!("{} --* {} : contains\n", from, to),
             Relation::Implements => format!("{} ..|> {}\n", from, to),
             Relation::Specializes => format!("{} ..|> {}\n", from, to),
         }

@@ -170,7 +170,7 @@ fn analyzes_generic_trait_bound_relationship() {
     // only through a generic bound, not a concrete field type).
     let blinky_relates_to_iui = out
         .lines()
-        .any(|line| line.contains("Blinky") && line.contains("IUi") && line.contains(">"));
+        .any(|line| line.contains("Blinky") && line.contains("IUi") && line.contains("--*"));
     assert!(
         blinky_relates_to_iui,
         "expected an edge relating `Blinky` to `IUi` via its `UiG: IUi` generic bound:\n{out}"
@@ -368,7 +368,7 @@ fn literal_include_covers_descendants_on_self() {
 
 #[test]
 fn depth1_view_of_self_has_no_bogus_model_parser_edge() {
-    // Regression: `model --> parser` used to appear in the
+    // Regression: `model --* parser` used to appear in the
     // `--collapse-depth 1` architecture view purely because a shared
     // compound type (`Option<String>`) was first synthesized in a
     // parser file. Compound types now live under `std`, so no such
@@ -378,14 +378,14 @@ fn depth1_view_of_self_has_no_bogus_model_parser_edge() {
 
     assert_plantuml_envelope(&out);
     assert!(
-        !out.contains("model --> parser"),
-        "spurious `model --> parser` edge in depth-1 view:\n{out}"
+        !out.contains("model --* parser"),
+        "spurious `model --* parser` edge in depth-1 view:\n{out}"
     );
-    // `parser --> model` is legitimate (GraphBuilder holds &mut Graph)
+    // `parser --* model` is legitimate (GraphBuilder holds &mut Graph)
     // and should still be there — this asserts the fix didn't
     // accidentally hide real dependencies.
     assert!(
-        out.contains("parser --> model"),
-        "legitimate `parser --> model` edge missing:\n{out}"
+        out.contains("parser --* model"),
+        "legitimate `parser --* model` edge missing:\n{out}"
     );
 }
