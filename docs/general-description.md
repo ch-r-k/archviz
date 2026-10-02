@@ -24,7 +24,7 @@ archviz:
 ```sh
 cargo run -- <path-to-rust-project>
 # e.g.
-cargo run -- example/src
+cargo run -- example/app/src
 ```
 
 The tool prints the generated PlantUML source to standard output. Redirect
@@ -32,7 +32,7 @@ it to a `.puml` file and render it with any PlantUML-compatible tool to get
 a visual diagram:
 
 ```sh
-cargo run -- example/src > diagram.puml
+cargo run -- example/app/src > diagram.puml
 plantuml diagram.puml   # produces diagram.png
 ```
 

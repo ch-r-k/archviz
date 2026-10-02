@@ -52,14 +52,29 @@ impl<'a> GraphBuilder<'a> {
         self.push_edge(struct_name, trait_name, Relation::Implements);
     }
 
-    /// Records a struct field of type `expr` as a composition edge from
-    /// `owner`. Compound and trait-wrapper types are expanded into
-    /// synthetic nodes + composition edges on the fly.
-    pub fn add_field_type(&mut self, owner: &str, expr: &TypeExpr) {
-        self.record_type(owner, Relation::Composition, expr);
+    /// Records that `owner` is generic over a type parameter bounded by
+    /// `trait_name` (e.g. `struct Blinky<UiG: IUi>`), emitting a dependency
+    /// edge to the bound trait even though no concrete field type names it.
+    pub fn add_generic_bound(&mut self, owner: &str, trait_name: &str) {
+        self.push_edge(owner, trait_name, Relation::Composition);
     }
 
-    fn record_type(&mut self, from: &str, relation: Relation, expr: &TypeExpr) {
+    /// Records a struct field of type `expr` as a composition edge from
+    /// `owner`. Compound and trait-wrapper types are expanded into
+    /// synthetic nodes + composition edges on the fly. `type_params` is the
+    /// owner's declared generic type-parameter names, so placeholder fields
+    /// (`ui: UiG`) are not mistaken for real types.
+    pub fn add_field_type(&mut self, owner: &str, expr: &TypeExpr, type_params: &[String]) {
+        self.record_type(owner, Relation::Composition, expr, type_params);
+    }
+
+    fn record_type(
+        &mut self,
+        from: &str,
+        relation: Relation,
+        expr: &TypeExpr,
+        type_params: &[String],
+    ) {
         let expr = expr.resolve_refs();
 
         if let Some(traits) = expr.trait_object_names() {
@@ -70,13 +85,35 @@ impl<'a> GraphBuilder<'a> {
         }
 
         let target = expr.type_name();
-        if looks_like_type_param(&target) {
+        if looks_like_type_param(&target) || type_params.contains(&target) {
             return;
         }
-        self.push_edge(from, &target, relation);
+        self.push_edge(from, &target, relation.clone());
 
         if expr.is_compound() {
             self.synthesize(expr);
+        }
+
+        // For concrete generics of project types (`Blinky<ConsoleUi>`), the
+        // owner also composes the base type and each type argument directly —
+        // so `Manager { blinky: Blinky<ConsoleUi> }` shows both
+        // `Manager --> Blinky` and `Manager --> ConsoleUi`, in addition to
+        // the synthesized `Blinky<ConsoleUi>` compound node emitted above.
+        if let TypeExpr::Generic { base, args } = expr {
+            if !is_std_name(base) && !args.is_empty() {
+                self.push_edge(from, base, relation.clone());
+                for arg in args {
+                    let arg = arg.resolve_refs();
+                    let name = arg.type_name();
+                    if looks_like_type_param(&name) || type_params.contains(&name) {
+                        continue;
+                    }
+                    self.push_edge(from, &name, relation.clone());
+                    if arg.is_compound() {
+                        self.synthesize(arg);
+                    }
+                }
+            }
         }
     }
 
@@ -140,10 +177,14 @@ impl<'a> GraphBuilder<'a> {
         if self.graph.has_node(&id) {
             return;
         }
+        // A concrete generic's abstract base (`Blinky<T>`) belongs in the
+        // same module as the concrete instantiation that introduced it, so
+        // it renders inside the owner's package instead of dangling at the
+        // top of the diagram. Std bases live under the `std` package.
         let module_path = if is_std_name(base) {
             vec!["std".to_string()]
         } else {
-            Vec::new()
+            self.module_path.clone()
         };
         self.graph.push_node(Node {
             id,

@@ -55,13 +55,13 @@ them. Filtering them requires a different (as-yet-unbuilt) feature.
 
 ## Worked examples
 
-Using the sample project in `example/src` (modules `domain`,
+Using the sample project in `example/app/src` (modules `domain`,
 `repository`, `service`).
 
 ### Exclude an internal module
 
 ```sh
-cargo run -- example/src --exclude 'repository'
+cargo run -- example/app/src --exclude 'repository'
 ```
 
 The `repository` module and its edges disappear; `domain::User` and
@@ -70,7 +70,7 @@ The `repository` module and its edges disappear; `domain::User` and
 ### Include only the domain layer
 
 ```sh
-cargo run -- example/src --include 'domain::**'
+cargo run -- example/app/src --include 'domain::**'
 ```
 
 Only `domain::User` (plus its std stubs) is drawn — everything else is
@@ -80,7 +80,7 @@ dropped, including edges that would have crossed into `repository` /
 ### Collapse a subsystem
 
 ```sh
-cargo run -- example/src --collapse 'repository'
+cargo run -- example/app/src --collapse 'repository'
 ```
 
 The `repository::UserRepository` and `repository::PostgresUserRepository`
@@ -92,7 +92,7 @@ collapsed classes vanish.
 ### Cap the visible depth
 
 ```sh
-cargo run -- example/src --collapse-depth 1
+cargo run -- example/app/src --collapse-depth 1
 ```
 
 Any module deeper than one level collapses into its top-level ancestor —
@@ -105,7 +105,7 @@ keep two nesting levels, and so on.
 Flags stack, and each is repeatable:
 
 ```sh
-cargo run -- example/src \
+cargo run -- example/app/src \
   --include 'crate::**' \
   --exclude '**::tests' \
   --exclude '**::internal' \

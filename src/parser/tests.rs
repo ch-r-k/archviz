@@ -93,6 +93,7 @@ fn compound_generic_lives_in_owner_module() {
                 base: "Vec".into(),
                 args: vec![TypeExpr::Simple("String".into())],
             },
+            &[],
         );
     }
     let vec_node = g
@@ -110,4 +111,78 @@ fn compound_generic_lives_in_owner_module() {
         "compound must live in the owner module, got {:?}",
         vec_node.module_path
     );
+}
+
+#[test]
+fn field_type_skips_declared_type_params() {
+    use crate::model::Graph;
+    use crate::parser::graph_builder::GraphBuilder;
+
+    let mut g = Graph::default();
+    let module = vec!["m".into()];
+    {
+        let mut b = GraphBuilder::new(&mut g, &module);
+        b.add_struct("Blinky");
+        b.add_field_type("Blinky", &TypeExpr::Simple("UiG".into()), &["UiG".into()]);
+        b.add_field_type("Blinky", &TypeExpr::Simple("ConsoleUi".into()), &["UiG".into()]);
+    }
+
+    assert!(
+        g.edges.iter().all(|e| e.to.as_str() != "UiG"),
+        "declared type param must not become an edge target"
+    );
+    assert!(
+        g.nodes.iter().all(|n| n.display_name != "UiG"),
+        "declared type param must not become a node"
+    );
+    assert!(
+        g.edges.iter().any(|e| e.to.as_str() == "ConsoleUi"),
+        "real field types must still be recorded"
+    );
+}
+
+#[test]
+fn local_generic_field_links_base_and_args_and_keeps_compound() {
+    use crate::model::Graph;
+    use crate::parser::graph_builder::GraphBuilder;
+
+    let mut g = Graph::default();
+    let module = vec!["app".into()];
+    {
+        let mut b = GraphBuilder::new(&mut g, &module);
+        b.add_struct("Manager");
+        b.add_field_type(
+            "Manager",
+            &TypeExpr::Generic {
+                base: "Blinky".into(),
+                args: vec![TypeExpr::Simple("ConsoleUi".into())],
+            },
+            &[],
+        );
+    }
+
+    // Concrete generic and its abstract base stay visible.
+    assert!(
+        g.nodes.iter().any(|n| n.display_name == "Blinky<ConsoleUi>"),
+        "concrete generic compound must still be synthesized"
+    );
+    let base = g
+        .nodes
+        .iter()
+        .find(|n| n.display_name == "Blinky<T>")
+        .expect("generic base synthesized");
+    assert_eq!(
+        base.module_path,
+        vec!["app".to_string()],
+        "generic base must live in the owner module, got {:?}",
+        base.module_path
+    );
+
+    // The owner composes the compound, the base and the type argument.
+    for expected in ["Blinky<ConsoleUi>", "Blinky", "ConsoleUi"] {
+        assert!(
+            g.edges.iter().any(|e| e.to.as_str() == expected),
+            "expected composition edge to `{expected}`"
+        );
+    }
 }

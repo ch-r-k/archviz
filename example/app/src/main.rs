@@ -1,3 +1,4 @@
+mod blinky;
 mod domain;
 mod repository;
 mod service;

@@ -127,7 +127,7 @@ that item for what's missing).
   > `ModuleFilter` (`src/enricher/tests.rs`), the module-path
   > `FilterSpec` (`src/filter/tests.rs`), and CLI parsing
   > (`src/cli.rs`). Black-box **system tests** in `tests/system.rs`
-  > invoke the compiled binary against the bundled `example/src` and
+  > invoke the compiled binary against the bundled `example/app/src` and
   > against archviz's own `src/` tree, asserting on the emitted
   > PlantUML and writing every rendered diagram to
   > `target/systemtest-output/` for developer inspection.

@@ -66,12 +66,12 @@ fn assert_plantuml_envelope(out: &str) {
 }
 
 // ---------------------------------------------------------------------
-// example/src — the bundled sample project
+// example/app/src — the bundled sample project
 // ---------------------------------------------------------------------
 
 #[test]
 fn analyzes_example_project_baseline() {
-    let out = run_archviz(&["example/src"]);
+    let out = run_archviz(&["example/app/src"]);
     write_artifact("example_baseline", &out);
 
     assert_plantuml_envelope(&out);
@@ -91,14 +91,14 @@ fn analyzes_example_project_baseline() {
 
 #[test]
 fn example_project_is_deterministic() {
-    let a = run_archviz(&["example/src"]);
-    let b = run_archviz(&["example/src"]);
+    let a = run_archviz(&["example/app/src"]);
+    let b = run_archviz(&["example/app/src"]);
     assert_eq!(a, b, "two runs on the same input produced different output");
 }
 
 #[test]
 fn exclude_flag_drops_matching_module_on_example() {
-    let out = run_archviz(&["example/src", "--exclude", "repository"]);
+    let out = run_archviz(&["example/app/src", "--exclude", "repository"]);
     write_artifact("example_exclude_repository", &out);
 
     assert_plantuml_envelope(&out);
@@ -116,7 +116,7 @@ fn exclude_flag_drops_matching_module_on_example() {
 
 #[test]
 fn collapse_flag_emits_package_placeholder_on_example() {
-    let out = run_archviz(&["example/src", "--collapse", "repository"]);
+    let out = run_archviz(&["example/app/src", "--collapse", "repository"]);
     write_artifact("example_collapse_repository", &out);
 
     assert_plantuml_envelope(&out);
@@ -131,6 +131,49 @@ fn collapse_flag_emits_package_placeholder_on_example() {
     assert!(
         !out.contains("repository__PostgresUserRepository"),
         "collapsed class still emitted:\n{out}"
+    );
+}
+
+// Regression test: a struct depending on a trait ONLY through a generic type
+// bound (`struct Blinky<UiG: IUi> { ui: UiG }`) must still produce a
+// relationship edge to that trait.
+//
+// The assertions are intentionally formatting-agnostic (they use `contains`
+// on the types and only require the two names to co-occur on a line), so they
+// keep working regardless of the analyzer's exact arrow/whitespace style.
+
+#[test]
+fn analyzes_generic_trait_bound_relationship() {
+    let out = run_archviz(&["example/blinky/src"]);
+    write_artifact("generic_bound_baseline", &out);
+
+    assert_plantuml_envelope(&out);
+
+    // Baseline sanity: the concrete impl is still detected.
+    assert!(
+        out.contains("ConsoleUi"),
+        "expected concrete impl struct `ConsoleUi`:\n{out}"
+    );
+    assert!(
+        out.contains("IUi"),
+        "expected trait `IUi`:\n{out}"
+    );
+
+    // The generic-bound struct itself must be present.
+    assert!(
+        out.contains("Blinky"),
+        "expected generic struct `Blinky`:\n{out}"
+    );
+
+    // The regression target: at least one edge line must relate `Blinky` to
+    // `IUi`. This is the case the analyzer currently drops (a trait reached
+    // only through a generic bound, not a concrete field type).
+    let blinky_relates_to_iui = out
+        .lines()
+        .any(|line| line.contains("Blinky") && line.contains("IUi") && line.contains(">"));
+    assert!(
+        blinky_relates_to_iui,
+        "expected an edge relating `Blinky` to `IUi` via its `UiG: IUi` generic bound:\n{out}"
     );
 }
 
@@ -185,7 +228,7 @@ fn self_analysis_with_collapse_hides_renderer_internals() {
 #[test]
 fn unknown_flag_exits_nonzero() {
     let output = Command::new(archviz_bin())
-        .args(["example/src", "--nope"])
+        .args(["example/app/src", "--nope"])
         .current_dir(repo_root())
         .output()
         .expect("spawn");

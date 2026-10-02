@@ -7,7 +7,7 @@ class diagram of its structs, traits, enums, and their relationships.
 
 ```sh
 cargo build
-cargo run -- <path-to-rust-project>      # e.g. cargo run -- example/src
+cargo run -- <path-to-rust-project>      # e.g. cargo run -- example/app/src
 cargo test                               # run all tests
 cargo test draw_struct_node_with_packages  # run a single test by name
 ```
@@ -17,7 +17,7 @@ treated as signal (see "known rough edges" below).
 
 The `example/` directory is a small sample Rust project (not part of the
 `archviz` crate/workspace) used as manual test input for the CLI — run
-`cargo run -- example/src` to sanity-check output after changes to the
+`cargo run -- example/app/src` to sanity-check output after changes to the
 parser/enricher/renderer.
 
 ## Architecture & documentation
